@@ -27,6 +27,8 @@ h3 { font-size: 1rem; margin-bottom: 0.75rem; }
 .sidebar {
   width: 220px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--sidebar);
   color: #e5e7eb;
   padding: 1.25rem 0.75rem;
@@ -37,6 +39,22 @@ h3 { font-size: 1rem; margin-bottom: 0.75rem; }
 .nav-link { color: #cbd5e1; text-decoration: none; padding: 0.6rem 0.75rem; border-radius: 8px; }
 .nav-link:hover { background: #1f2937; color: #fff; }
 .nav-link.active { background: var(--primary); color: #fff; }
+
+.session { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 0.5rem 0; border-top: 1px solid #1f2937; }
+.session-role { font-size: 0.85rem; color: #94a3b8; }
+.btn-logout { background: transparent; color: #e5e7eb; border-color: #374151; }
+.btn-logout:hover { background: #1f2937; }
+
+.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.login-card { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 1rem; }
+.login-brand { padding: 0; color: var(--text); }
+.role-picker { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.role-picker legend { font-size: 0.85rem; font-weight: 500; color: #374151; margin-bottom: 0.35rem; }
+.role-option { flex-direction: row; align-items: center; gap: 0.75rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.role-option > span { display: flex; flex-direction: column; gap: 0.1rem; }
+.role-option-selected { border-color: var(--primary); background: #eef2ff; }
+.role-option:focus-within { outline: 2px solid #c7d2fe; }
+.login-submit { width: 100%; }
 
 .content { flex: 1; padding: 2rem; max-width: 1200px; }
 .page { display: flex; flex-direction: column; gap: 1.25rem; }

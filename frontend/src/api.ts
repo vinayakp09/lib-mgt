@@ -5,8 +5,10 @@ import type {
   Loan,
   LoanInput,
   LoanStatus,
+  LoginResponse,
   Member,
   MemberInput,
+  Role,
 } from './types';
 
 export class ApiError extends Error {
@@ -19,11 +21,36 @@ export class ApiError extends Error {
   }
 }
 
+let authToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+/** Token sent as `Authorization: Bearer …` on every request; null when logged out. */
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+/** Called when an authenticated request gets 401 (expired or invalid session). Returns an unsubscribe function. */
+export function onUnauthorized(handler: () => void) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const sentToken = authToken;
   const res = await fetch(`/api${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(sentToken ? { Authorization: `Bearer ${sentToken}` } : {}),
+      ...init.headers,
+    },
   });
+
+  if (res.status === 401 && sentToken) {
+    unauthorizedHandler?.();
+  }
 
   if (!res.ok) {
     let message = res.statusText || `Request failed (${res.status})`;
@@ -54,6 +81,9 @@ const query = (params: Record<string, string | number | undefined>) => {
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const api = {
+  login: (role: Role, password: string) =>
+    request<LoginResponse>('/v1/auth/login', json('POST', { role, password })),
+
   getDashboard: () => request<DashboardStats>('/dashboard'),
 
   getBooks: (search?: string) => request<Book[]>(`/books${query({ search })}`),

@@ -32,7 +32,8 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
 │   │   ├── main.ts              # bootstrap: create app, configureApp(), listen
 │   │   ├── app.setup.ts         # global prefix "api", CORS, ValidationPipe
 │   │   ├── app.module.ts        # AppModule.register(options): TypeORM, feature modules, ServeStatic
-│   │   ├── config.ts            # PORT, DB_PATH, AUTO_SEED, frontend dist path
+│   │   ├── config.ts            # PORT, DB_PATH, AUTO_SEED, AUTH_SECRET, frontend dist path
+│   │   ├── auth/                # login endpoint, AuthService (JWT), global AuthGuard, @Public/@Roles
 │   │   ├── books/               # Book entity, DTOs, BooksService, BooksController
 │   │   ├── members/             # Member entity, DTOs, MembersService, MembersController
 │   │   ├── loans/               # Loan entity, DTOs, LoansService, LoansController, loan.rules.ts
@@ -43,12 +44,13 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
 └── frontend/                    # React SPA
     ├── index.html, vite.config.ts (dev proxy + vitest config)
     └── src/
-        ├── main.tsx, App.tsx     # BrowserRouter, sidebar layout, routes
-        ├── api.ts                # the only place that calls fetch()
+        ├── main.tsx, App.tsx     # AuthProvider + BrowserRouter; login gate, sidebar layout, role-based routes
+        ├── auth.tsx              # AuthProvider / useAuth: session (role + token), login, logout
+        ├── api.ts                # the only place that calls fetch(); attaches the Bearer token
         ├── types.ts              # TS types mirroring API responses
         ├── utils.ts              # form validation, date formatting
         ├── components/           # BookForm, MemberForm, StatusBadge
-        ├── pages/                # DashboardPage, BooksPage, MembersPage, LoansPage
+        ├── pages/                # LoginPage, DashboardPage, BooksPage, MembersPage, LoansPage
         └── test/                 # vitest setup + fixtures
 ```
 
@@ -56,11 +58,14 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
 
 | Module | Responsibility | Depends on (repositories) |
 | --- | --- | --- |
+| `AuthModule` | `POST /api/v1/auth/login` (role + static password `1234` → JWT), `GET /api/v1/auth/me`; registers the global `AuthGuard` that requires a token on every route and enforces `@Roles('admin')` | `JwtService` (no tables) |
 | `BooksModule` | Catalogue CRUD + search; keeps `availableCopies` consistent on edits | `Book`, `Loan` |
 | `MembersModule` | Member CRUD + search; unique lower-case email | `Member`, `Loan` |
 | `LoansModule` | Issue / return / list loans; all lending rules | `Loan` + `DataSource` transactions over `Book`, `Member` |
 | `DashboardModule` | Read-only aggregate stats | `Book`, `Member`, `Loan` |
 | `DatabaseModule` | `SeedService`: auto-seed on bootstrap if empty; `seed({reset:true})` for the CLI | `DataSource` |
+
+Request pipeline: global **`AuthGuard`** (token + role check; `@Public()` skips it) → **`ValidationPipe`** → controller.
 
 Layering inside a module: **Controller** (HTTP, param parsing, DTO validation) → **Service** (business rules, throws Nest HTTP exceptions) → **TypeORM Repository / EntityManager**. Pure domain rules (due dates, fines, status) live in `loans/loan.rules.ts` with no framework dependencies.
 
@@ -70,15 +75,18 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 
 ## Frontend
 
-| Route | Page | API calls |
-| --- | --- | --- |
-| `/` | `DashboardPage` | `GET /api/dashboard` |
-| `/books` | `BooksPage` (+ `BookForm`) | `GET/POST/PATCH/DELETE /api/books` |
-| `/members` | `MembersPage` (+ `MemberForm`) | `GET/POST/PATCH/DELETE /api/members` |
-| `/loans` | `LoansPage` | `GET /api/loans?status=`, `GET /api/books`, `GET /api/members`, `POST /api/loans`, `PATCH /api/loans/:id/return` |
-| `*` | redirect to `/` | – |
+| Route | Page | Roles | API calls |
+| --- | --- | --- | --- |
+| any, while logged out | `LoginPage` | – | `POST /api/v1/auth/login` |
+| `/` | `DashboardPage` | admin, user | `GET /api/dashboard` |
+| `/books` | `BooksPage` (+ `BookForm`) | admin: full; user: read-only (`canManage={false}`) | `GET/POST/PATCH/DELETE /api/books` |
+| `/members` | `MembersPage` (+ `MemberForm`) | admin only (route not registered for users → redirect to `/`) | `GET/POST/PATCH/DELETE /api/members` |
+| `/loans` | `LoansPage` | admin, user | `GET /api/loans?status=`, `GET /api/books`, `GET /api/members`, `POST /api/loans`, `PATCH /api/loans/:id/return` |
+| `*` | redirect to `/` | – | – |
 
-- State: plain React `useState`/`useEffect` per page; no global store. Pages reload their list after every mutation.
+- **Auth state:** `AuthProvider` (`src/auth.tsx`) holds the session `{ role, token }`, persists it in `localStorage` (`lms.session`), and passes the token to `api.ts` via `setAuthToken`. `App` renders `LoginPage` until there is a session, then filters sidebar links (`adminOnly`) and routes by role. A 401 from the API logs the visitor out with a "session expired" notice.
+- Hiding admin UI is for usability only — the backend `AuthGuard` is what enforces permissions.
+- Other state: plain React `useState`/`useEffect` per page; no global store. Pages reload their list after every mutation.
 - Search inputs are debounced 250 ms before calling the API.
 - Client-side validation (`utils.ts`) mirrors the backend DTO rules; server errors are still shown via `ApiError.message`.
 - Styling: single `index.css`, no UI library.
@@ -90,6 +98,7 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 | `PORT` | `3000` | backend |
 | `DB_PATH` | `<repo>/database/library.sqlite` | backend |
 | `AUTO_SEED` | `true` (set `false` to disable) | backend – seeds sample data on start if `books` is empty |
+| `AUTH_SECRET` | random per process | backend – signs login tokens; set it to keep sessions valid across restarts |
 
 ## Scripts (repo root)
 
@@ -107,7 +116,8 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 ## Testing strategy
 
 - **Backend unit tests** (`backend/src/**/*.spec.ts`): real services against a fresh **in-memory SQLite** DB per test (`src/testing/test-db.ts`) — no repository mocks. `loan.rules.spec.ts` tests pure functions.
-- **Backend e2e** (`backend/test/app.e2e-spec.ts`): full Nest app with `configureApp()`, in-memory DB, auto-seeded, driven over HTTP with Supertest.
+- **Backend e2e** (`backend/test/app.e2e-spec.ts`): full Nest app with `configureApp()`, in-memory DB, auto-seeded, driven over HTTP with Supertest. It logs in as admin and as user in `beforeAll` and checks 401/403 rules.
+- **Auth unit tests:** `auth.service.spec.ts` (login, token verification) and `auth.guard.spec.ts` (public / any-role / admin-only routes).
 - **Frontend** (`frontend/src/**/*.test.ts(x)`): Vitest + jsdom + Testing Library; `../api` is mocked with `vi.mock`, `api.test.ts` stubs `fetch`.
 
 ## Where to put new code
@@ -117,4 +127,5 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 | New entity / resource | New folder `backend/src/<resource>/` with entity, `dto/`, service, controller, module; register entity in `entities` in `app.module.ts` and import the module there |
 | New lending rule | `backend/src/loans/loan.rules.ts` (pure) or `loans.service.ts` (needs DB) |
 | New API call from UI | Add a method on `api` in `frontend/src/api.ts` + types in `types.ts` |
-| New page | `frontend/src/pages/`, route in `App.tsx`, link in the sidebar `links` array |
+| New page | `frontend/src/pages/`, route in `App.tsx`, link in the sidebar `links` array (set `adminOnly` and only register the route for admins if needed) |
+| New endpoint permission | `@Roles('admin')` on the controller method; `@Public()` only for login-like routes (`backend/src/auth/auth.constants.ts`) |

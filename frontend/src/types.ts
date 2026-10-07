@@ -1,3 +1,17 @@
+export type Role = 'admin' | 'user';
+
+export interface LoginResponse {
+  success: boolean;
+  role: Role;
+  token: string;
+  expiresIn: number;
+}
+
+export interface Session {
+  role: Role;
+  token: string;
+}
+
 export interface Book {
   id: number;
   title: string;

@@ -32,6 +32,15 @@ describe('BooksPage', () => {
     expect(within(duneRow).getByText('0 / 3')).toHaveClass('text-danger');
   });
 
+  it('is read-only unless the viewer can manage books', async () => {
+    render(<BooksPage />);
+    await screen.findByText('Clean Code');
+
+    expect(screen.queryByRole('button', { name: '+ Add book' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
   it('searches books', async () => {
     render(<BooksPage />);
     await screen.findByText('Clean Code');
@@ -43,7 +52,7 @@ describe('BooksPage', () => {
 
   it('adds a book and reloads the list', async () => {
     mocked.createBook.mockResolvedValue(book({ id: 3 }));
-    render(<BooksPage />);
+    render(<BooksPage canManage />);
     await screen.findByText('Clean Code');
 
     await userEvent.click(screen.getByRole('button', { name: '+ Add book' }));
@@ -62,7 +71,7 @@ describe('BooksPage', () => {
   it('shows an error when delete fails', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     mocked.deleteBook.mockRejectedValue(new Error('Cannot delete a book that has copies on loan'));
-    render(<BooksPage />);
+    render(<BooksPage canManage />);
 
     const row = (await screen.findByText('Clean Code')).closest('tr')!;
     await userEvent.click(within(row).getByRole('button', { name: 'Delete' }));

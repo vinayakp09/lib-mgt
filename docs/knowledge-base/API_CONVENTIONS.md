@@ -3,7 +3,7 @@
 ## URL style & versioning
 
 - Base path: **`/api`** (set globally with `app.setGlobalPrefix('api')`). Everything else on the server is the React SPA.
-- **No versioning** (`/api/books`, not `/api/v1/books`). If a breaking change is ever needed, introduce `/api/v2/...` via Nest URI versioning rather than changing existing responses.
+- **All new APIs live under `/api/v1`** (e.g. `/api/v1/auth/login`; controller path `'v1/<resource>'`). The original resources (`/api/books`, `/api/members`, `/api/loans`, `/api/dashboard`) predate this rule and stay unversioned so existing clients keep working.
 - Resources are **plural nouns**, lower-case: `/books`, `/members`, `/loans`, `/dashboard`.
 - IDs are integers in the path: `/books/:id` (parsed with `ParseIntPipe`; non-numeric → 400).
 - Actions that aren't plain CRUD are **sub-resource verbs with PATCH**: `PATCH /loans/:id/return`.
@@ -12,29 +12,38 @@
 
 ## Endpoints
 
-| Method | Path | Body / query | Success |
-| --- | --- | --- | --- |
-| GET | `/api/dashboard` | – | 200 `DashboardStats` |
-| GET | `/api/books` | `?search=` (title/author/ISBN/category, case-insensitive contains) | 200 `Book[]` sorted by title |
-| GET | `/api/books/:id` | – | 200 `Book` |
-| POST | `/api/books` | `{ title, author, isbn, category?, publishedYear?, totalCopies }` | 201 `Book` |
-| PATCH | `/api/books/:id` | any subset of the POST fields | 200 `Book` |
-| DELETE | `/api/books/:id` | – | 204 (no body) |
-| GET | `/api/members` | `?search=` (name/email/phone) | 200 `Member[]` sorted by name |
-| GET | `/api/members/:id` | – | 200 `Member` |
-| POST | `/api/members` | `{ name, email, phone?, active? }` | 201 `Member` |
-| PATCH | `/api/members/:id` | any subset of the POST fields | 200 `Member` |
-| DELETE | `/api/members/:id` | – | 204 |
-| GET | `/api/loans` | `?status=active\|overdue\|returned&memberId=&bookId=` | 200 `Loan[]` newest first |
-| GET | `/api/loans/:id` | – | 200 `Loan` |
-| POST | `/api/loans` | `{ bookId, memberId, loanDays? }` (1–60, default 14) | 201 `Loan` |
-| PATCH | `/api/loans/:id/return` | – | 200 `Loan` (with `fine`) |
+Access: **public** = no token; **any** = admin or user token; **admin** = admin token only (user gets 403).
+
+| Method | Path | Body / query | Access | Success |
+| --- | --- | --- | --- | --- |
+| POST | `/api/v1/auth/login` | `{ role: "admin" \| "user", password }` | public | 200 `LoginResponse` |
+| GET | `/api/v1/auth/me` | – | any | 200 `{ role }` |
+| GET | `/api/dashboard` | – | any | 200 `DashboardStats` |
+| GET | `/api/books` | `?search=` (title/author/ISBN/category, case-insensitive contains) | any | 200 `Book[]` sorted by title |
+| GET | `/api/books/:id` | – | any | 200 `Book` |
+| POST | `/api/books` | `{ title, author, isbn, category?, publishedYear?, totalCopies }` | admin | 201 `Book` |
+| PATCH | `/api/books/:id` | any subset of the POST fields | admin | 200 `Book` |
+| DELETE | `/api/books/:id` | – | admin | 204 (no body) |
+| GET | `/api/members` | `?search=` (name/email/phone) | any | 200 `Member[]` sorted by name |
+| GET | `/api/members/:id` | – | any | 200 `Member` |
+| POST | `/api/members` | `{ name, email, phone?, active? }` | admin | 201 `Member` |
+| PATCH | `/api/members/:id` | any subset of the POST fields | admin | 200 `Member` |
+| DELETE | `/api/members/:id` | – | admin | 204 |
+| GET | `/api/loans` | `?status=active\|overdue\|returned&memberId=&bookId=` | any | 200 `Loan[]` newest first |
+| GET | `/api/loans/:id` | – | any | 200 `Loan` |
+| POST | `/api/loans` | `{ bookId, memberId, loanDays? }` (1–60, default 14) | any | 201 `Loan` |
+| PATCH | `/api/loans/:id/return` | – | any | 200 `Loan` (with `fine`) |
+
+`GET /api/members` is open to users because issuing a book needs the member list.
 
 `status=active` means *not yet returned* (it **includes** overdue loans); `status=overdue` is only the late subset.
 
 ## Response shapes
 
 ```jsonc
+// LoginResponse
+{ "success": true, "role": "user", "token": "<JWT>", "expiresIn": 28800 }
+
 // Book
 { "id": 1, "title": "Dune", "author": "Frank Herbert", "isbn": "9780441172719",
   "category": "Science Fiction", "publishedYear": 1965,
@@ -84,17 +93,28 @@ For validation failures `message` is an **array** of strings:
 
 | Status | When |
 | --- | --- |
-| 400 Bad Request | Validation failure, non-numeric id, or business-rule violation (no copies, inactive member, loan limit, already returned, delete with active loans, copies below on-loan count) |
+| 400 Bad Request | Validation failure (incl. unknown login role), non-numeric id, or business-rule violation (no copies, inactive member, loan limit, already returned, delete with active loans, copies below on-loan count) |
+| 401 Unauthorized | Wrong login password (`"Invalid role or password"`), or a missing / invalid / expired token (`"Login required"`) |
+| 403 Forbidden | Valid token but the role may not call this route (user on an admin route) |
 | 404 Not Found | Unknown book / member / loan id |
 | 409 Conflict | Duplicate ISBN or member email |
 | 500 | Unexpected errors only |
 
 Services throw Nest exceptions (`BadRequestException`, `NotFoundException`, `ConflictException`) with a human-readable message that the UI shows as-is.
 
-## Auth
+## Auth (REQ-105)
 
-- **None.** No login, tokens or roles; all endpoints are open. CORS is enabled for all origins (`app.enableCors()`).
-- The app is intended for a trusted local/staff network. If exposed publicly, add auth (e.g. a Nest guard with JWT/session) before anything else.
+- **Roles:** `admin` (full access) and `user` (search books, borrow, return). There are no user accounts — a visitor picks a role and enters the **static default password `1234`** (`DEFAULT_PASSWORD` in `backend/src/auth/auth.constants.ts`).
+- **Login:** `POST /api/v1/auth/login` returns a signed JWT (`@nestjs/jwt`, HS256) carrying `{ role }`, valid for 8 hours.
+- **Using the token:** send `Authorization: Bearer <token>` on every other request.
+- **Enforcement:** a global `AuthGuard` (`APP_GUARD`) protects **every** controller route by default.
+  - `@Public()` opts a route out (only the login route uses it).
+  - `@Roles('admin')` restricts a route to admins; routes without it accept any valid role.
+  - Serving the SPA (static files) is not guarded — the frontend shows the login screen itself.
+- **Secret:** `AUTH_SECRET` env var. If unset, a random secret is generated at startup, so all sessions end when the server restarts.
+- **Checklist for new endpoints:** decide the access level explicitly — add `@Roles('admin')` for anything that changes catalogue/member data; never add `@Public()` except for login-like routes.
+- CORS is enabled for all origins (`app.enableCors()`); tokens are not cookies, so CORS does not expose them.
+- This is a shared-password, role-only scheme for a trusted local network — not per-person accounts. Do not expose the app publicly without replacing it.
 
 ## Pagination
 
@@ -108,13 +128,15 @@ Services throw Nest exceptions (`BadRequestException`, `NotFoundException`, `Con
 - `request<T>()` sets `Content-Type: application/json`, parses JSON, treats an empty body (204) as `undefined`, and on non-2xx throws `ApiError(message, status)`; an array `message` is joined with `", "`.
 - Response types are declared in `frontend/src/types.ts` and must be kept in sync with backend entities/DTOs by hand.
 - Query strings are built with `URLSearchParams`, skipping empty/undefined values.
+- `setAuthToken(token)` makes every request send `Authorization: Bearer <token>`; `AuthProvider` (`frontend/src/auth.tsx`) calls it on login, logout and when restoring a saved session.
+- If an authenticated request gets **401**, the handler registered with `onUnauthorized()` runs — `AuthProvider` clears the session and shows the login screen with a "session has expired" notice.
 - Pages catch errors and display `err.message` in an alert; after any successful mutation they re-fetch the list.
 
 ## Checklist for a new endpoint
 
-1. DTO with validators in `dto/`; use `ParseIntPipe` for `:id` params.
+1. New routes go under `/api/v1`; decide access (`@Roles('admin')` or any role); DTO with validators in `dto/`; use `ParseIntPipe` for `:id` params.
 2. Business rules in the service; throw the matching Nest exception with a clear message.
 3. Use `@HttpCode(204)` for deletes; POST returns 201 with the created entity.
-4. Add a unit test (service, in-memory DB) and extend `test/app.e2e-spec.ts` for the HTTP contract.
+4. Add a unit test (service, in-memory DB) and extend `test/app.e2e-spec.ts` for the HTTP contract, including 401 without a token and 403 for a role that is not allowed.
 5. Add the method to `frontend/src/api.ts` and types to `frontend/src/types.ts`.
 6. Update this document.

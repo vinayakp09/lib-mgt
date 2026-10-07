@@ -14,6 +14,7 @@ Detailed docs live in [`docs/knowledge-base/`](docs/knowledge-base/): [Project o
 
 ## Features
 
+- **Role-based login** – choose **User** or **Admin** and enter the default password **`1234`**. Admins have full access; users can search books, borrow and return (no book/member editing)
 - **Books** – catalogue CRUD, search by title/author/ISBN/category, copy tracking (available / total)
 - **Members** – registration, active/inactive status, search
 - **Loans** – issue and return books, due dates, overdue detection, late fines
@@ -55,7 +56,7 @@ npm run dev          # API on :3000 (nest --watch) + Vite on http://localhost:51
 ```
 
 The database is auto-seeded on first start if it is empty. Set `AUTO_SEED=false` to disable.
-Other environment variables: `PORT` (default `3000`), `DB_PATH` (default `database/library.sqlite`).
+Other environment variables: `PORT` (default `3000`), `DB_PATH` (default `database/library.sqlite`), `AUTH_SECRET` (signs login tokens; if unset a random one is used and everyone is logged out when the server restarts).
 
 ## Tests
 
@@ -69,10 +70,12 @@ Backend unit tests run the real services against a fresh in-memory SQLite databa
 
 ## REST API
 
-All routes are prefixed with `/api`.
+All routes are prefixed with `/api`. Every route except login needs `Authorization: Bearer <token>`; creating, editing or deleting books and members needs the **admin** role (users get `403`). Full access matrix: [API conventions](docs/knowledge-base/API_CONVENTIONS.md).
 
 | Method | Route                  | Description                                          |
 | ------ | ---------------------- | ---------------------------------------------------- |
+| POST   | `/v1/auth/login`       | Log in `{ role: "admin" \| "user", password: "1234" }` → `{ success, role, token, expiresIn }` |
+| GET    | `/v1/auth/me`          | Role behind the current token                        |
 | GET    | `/dashboard`           | Statistics, recent loans, top books                  |
 | GET    | `/books?search=`       | List / search books                                  |
 | GET    | `/books/:id`           | Get a book                                           |

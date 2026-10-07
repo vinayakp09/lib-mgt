@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Roles } from '../auth/auth.constants';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { MembersService } from './members.service';
@@ -29,16 +30,19 @@ export class MembersController {
   }
 
   @Post()
+  @Roles('admin')
   create(@Body() dto: CreateMemberDto) {
     return this.membersService.create(dto);
   }
 
   @Patch(':id')
+  @Roles('admin')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateMemberDto) {
     return this.membersService.update(id, dto);
   }
 
   @Delete(':id')
+  @Roles('admin')
   @HttpCode(204)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.membersService.remove(id);

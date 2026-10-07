@@ -6,17 +6,21 @@
 
 ## Who uses it
 
-| User | What they do |
-| --- | --- |
-| **Librarian / staff** (primary, only user type) | Maintains the catalogue, registers members, issues and returns books, watches overdue loans on the dashboard |
+Everyone signs in on the login screen by choosing a **role** and entering the static default password **`1234`** (REQ-105). There are no individual accounts.
 
-There is **no authentication** and no member-facing portal — the app assumes it runs on a trusted staff machine / local network.
+| Role | What they can do |
+| --- | --- |
+| **Admin** | Full access: dashboard, manage books (add / edit / delete), manage members, issue and return books |
+| **User** | Dashboard, search the catalogue (read-only), issue (borrow) and return books. No Members page, no book editing |
+
+The app is meant for a trusted staff machine / local network; there is still no member-facing portal.
 
 ## Main flows
 
+0. **Log in** – any page shows the login screen until the visitor picks *User* or *Admin* and enters `1234`. The session is remembered in the browser for 8 hours; *Log out* is in the sidebar.
 1. **Dashboard** (`/`) – see totals (titles, copies, available copies, members, books on loan, overdue), the 5 most recent loans and the top 5 most-borrowed books.
-2. **Manage books** (`/books`) – search (title / author / ISBN / category), add, edit, delete. Each book tracks `totalCopies` and `availableCopies`.
-3. **Manage members** (`/members`) – search (name / email / phone), register, edit, activate/deactivate, delete.
+2. **Manage books** (`/books`) – search (title / author / ISBN / category); admins also add, edit, delete. Each book tracks `totalCopies` and `availableCopies`.
+3. **Manage members** (`/members`, admin only) – search (name / email / phone), register, edit, activate/deactivate, delete.
 4. **Issue a book** (`/loans`) – choose an *active* member and a book with an available copy, optionally change loan length (default 14 days). Availability drops by one.
 5. **Return a book** (`/loans`) – click *Return*; the fine is calculated if late and availability increases by one.
 6. **Track loans** (`/loans`) – filter tabs: All / On loan / Overdue / Returned.
@@ -44,6 +48,8 @@ There is **no authentication** and no member-facing portal — the app assumes i
 | **Book / Title** | A catalogue entry identified by ISBN. One book row can have many physical copies. |
 | **Copy** | A physical item of a book. Tracked only as counts: `totalCopies`, `availableCopies`. |
 | **Member** | A registered library patron who can borrow books. `active=false` means suspended. |
+| **Role** | Who is signed in: `admin` (full access) or `user` (search, borrow, return). Not a person — anyone with the password can pick either role. |
+| **Session / token** | The signed JWT returned by login and stored in the browser; sent as `Authorization: Bearer …`, expires after 8 h. |
 | **Loan** | One copy of one book lent to one member. Has `loanDate`, `dueDate`, optional `returnDate`, `fine`. |
 | **Issue / Borrow** | Creating a loan (`POST /api/loans`). |
 | **Return** | Closing a loan (`PATCH /api/loans/:id/return`). |

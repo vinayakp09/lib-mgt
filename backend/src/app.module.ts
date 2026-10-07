@@ -3,6 +3,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { AuthModule } from './auth/auth.module';
 import { Book } from './books/book.entity';
 import { BooksModule } from './books/books.module';
 import { config } from './config';
@@ -42,6 +43,7 @@ export class AppModule {
         entities,
         synchronize: true,
       }),
+      AuthModule,
       BooksModule,
       MembersModule,
       LoansModule,

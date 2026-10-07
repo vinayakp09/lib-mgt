@@ -4,7 +4,12 @@ import { BookForm } from '../components/BookForm';
 import type { Book, BookInput } from '../types';
 import { errorMessage } from '../utils';
 
-export function BooksPage() {
+interface Props {
+  /** Admins can add, edit and delete; users get a read-only, searchable catalogue. */
+  canManage?: boolean;
+}
+
+export function BooksPage({ canManage = false }: Props) {
   const [books, setBooks] = useState<Book[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,12 +56,14 @@ export function BooksPage() {
     <div className="page">
       <header className="page-header">
         <h1>Books</h1>
-        <button className="btn btn-primary" onClick={() => setEditing('new')}>
-          + Add book
-        </button>
+        {canManage && (
+          <button className="btn btn-primary" onClick={() => setEditing('new')}>
+            + Add book
+          </button>
+        )}
       </header>
 
-      {editing && (
+      {canManage && editing && (
         <BookForm
           key={editing === 'new' ? 'new' : editing.id}
           initial={editing === 'new' ? null : editing}
@@ -91,7 +98,7 @@ export function BooksPage() {
                 <th>Category</th>
                 <th>Year</th>
                 <th>Available</th>
-                <th aria-label="Actions" />
+                {canManage && <th aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -107,10 +114,12 @@ export function BooksPage() {
                       {book.availableCopies} / {book.totalCopies}
                     </span>
                   </td>
-                  <td className="actions">
-                    <button className="btn btn-small" onClick={() => setEditing(book)}>Edit</button>
-                    <button className="btn btn-small btn-danger" onClick={() => handleDelete(book)}>Delete</button>
-                  </td>
+                  {canManage && (
+                    <td className="actions">
+                      <button className="btn btn-small" onClick={() => setEditing(book)}>Edit</button>
+                      <button className="btn btn-small btn-danger" onClick={() => handleDelete(book)}>Delete</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
