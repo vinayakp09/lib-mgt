@@ -21,6 +21,10 @@ export interface Book {
   publishedYear: number | null;
   totalCopies: number;
   availableCopies: number;
+  coverImageUrl: string | null;
+  description: string | null;
+  averageRating: number | null;
+  reviewCount: number;
   createdAt: string;
 }
 
@@ -31,6 +35,44 @@ export interface BookInput {
   category: string;
   publishedYear: number | null;
   totalCopies: number;
+  coverImageUrl: string | null;
+  description: string | null;
+}
+
+export interface Review {
+  id: number;
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface ReviewInput {
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
+}
+
+export type BookDetail = Book & { reviews: Review[] };
+
+export type BookSortField = 'title' | 'author' | 'publishedYear' | 'averageRating' | 'createdAt';
+
+export interface BookListParams {
+  search?: string;
+  category?: string;
+  availability?: 'available' | 'unavailable';
+  sort?: BookSortField;
+  order?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface Member {

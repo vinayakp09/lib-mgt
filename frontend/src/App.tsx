@@ -27,7 +27,7 @@ export default function App() {
           <span className="brand-icon">📖</span>
           <span>Library MS</span>
         </div>
-        <nav>
+        <nav aria-label="Main">
           {links
             .filter((link) => isAdmin || !link.adminOnly)
             .map((link) => (

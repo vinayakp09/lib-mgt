@@ -8,12 +8,15 @@ const validBook = {
   category: 'Sci-Fi',
   publishedYear: '1965',
   totalCopies: '2',
+  coverImageUrl: '',
+  description: '',
 };
 
 describe('validateBook', () => {
   it('accepts a valid book', () => {
     expect(validateBook(validBook)).toBeNull();
     expect(validateBook({ ...validBook, publishedYear: '' })).toBeNull();
+    expect(validateBook({ ...validBook, coverImageUrl: 'https://covers.example.com/dune.jpg' })).toBeNull();
   });
 
   it.each([
@@ -23,6 +26,9 @@ describe('validateBook', () => {
     [{ totalCopies: '0' }, 'Total copies must be a whole number of at least 1'],
     [{ totalCopies: '1.5' }, 'Total copies must be a whole number of at least 1'],
     [{ publishedYear: '3000' }, 'Published year is invalid'],
+    [{ coverImageUrl: 'javascript:alert(1)' }, 'Cover image URL must start with http:// or https://'],
+    [{ coverImageUrl: 'not a url' }, 'Cover image URL must start with http:// or https://'],
+    [{ description: 'x'.repeat(2001) }, 'Description must be at most 2000 characters'],
   ])('rejects %o', (patch, message) => {
     expect(validateBook({ ...validBook, ...patch })).toBe(message);
   });

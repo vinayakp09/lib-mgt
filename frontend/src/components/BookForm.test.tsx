@@ -34,7 +34,29 @@ describe('BookForm', () => {
       category: 'General',
       publishedYear: 1965,
       totalCopies: 3,
+      coverImageUrl: null,
+      description: null,
     });
+  });
+
+  it('submits cover image URL and description, and rejects non-http URLs', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<BookForm initial={book()} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Cover image URL'), 'ftp://example.com/c.jpg');
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Cover image URL must start with http');
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.clear(screen.getByLabelText('Cover image URL'));
+    await userEvent.type(screen.getByLabelText('Cover image URL'), 'https://example.com/c.jpg');
+    await userEvent.clear(screen.getByLabelText('Description'));
+    await userEvent.type(screen.getByLabelText('Description'), '  New blurb  ');
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ coverImageUrl: 'https://example.com/c.jpg', description: 'New blurb' }),
+    );
   });
 
   it('pre-fills values when editing and shows server errors', async () => {

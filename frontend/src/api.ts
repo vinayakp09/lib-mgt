@@ -1,6 +1,8 @@
 import type {
   Book,
+  BookDetail,
   BookInput,
+  BookListParams,
   DashboardStats,
   Loan,
   LoanInput,
@@ -8,6 +10,8 @@ import type {
   LoginResponse,
   Member,
   MemberInput,
+  Paginated,
+  ReviewInput,
   Role,
 } from './types';
 
@@ -87,6 +91,11 @@ export const api = {
   getDashboard: () => request<DashboardStats>('/dashboard'),
 
   getBooks: (search?: string) => request<Book[]>(`/books${query({ search })}`),
+  listBooks: (params: BookListParams = {}) => request<Paginated<Book>>(`/v1/books${query({ ...params })}`),
+  getBookCategories: () => request<string[]>('/v1/books/categories'),
+  getBookDetail: (id: number) => request<BookDetail>(`/v1/books/${id}`),
+  addReview: (bookId: number, input: ReviewInput) =>
+    request<BookDetail>(`/v1/books/${bookId}/reviews`, json('POST', input)),
   createBook: (input: BookInput) => request<Book>('/books', json('POST', input)),
   updateBook: (id: number, input: Partial<BookInput>) => request<Book>(`/books/${id}`, json('PATCH', input)),
   deleteBook: (id: number) => request<void>(`/books/${id}`, { method: 'DELETE' }),

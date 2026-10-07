@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { api, onUnauthorized, setAuthToken } from './api';
 import { AuthProvider, SESSION_STORAGE_KEY } from './auth';
-import { book, loan, member } from './test/fixtures';
+import { book, bookDetail, loan, member, paginated } from './test/fixtures';
 import type { Role } from './types';
 
 vi.mock('./api', () => ({
@@ -13,6 +13,9 @@ vi.mock('./api', () => ({
     login: vi.fn(),
     getDashboard: vi.fn(),
     getBooks: vi.fn(),
+    listBooks: vi.fn(),
+    getBookCategories: vi.fn(),
+    getBookDetail: vi.fn(),
     getMembers: vi.fn(),
     getLoans: vi.fn(),
   },
@@ -39,7 +42,7 @@ async function logIn(role: 'User' | 'Admin') {
 }
 
 const navLinks = () =>
-  within(screen.getByRole('navigation'))
+  within(screen.getByRole('navigation', { name: 'Main' }))
     .getAllByRole('link')
     .map((link) => link.textContent?.replace(/[^A-Za-z ]/g, '').trim());
 
@@ -54,6 +57,9 @@ describe('App authentication and role-based access', () => {
       activeLoans: 1, overdueLoans: 0, recentLoans: [loan()], topBooks: [],
     });
     mocked.getBooks.mockReset().mockResolvedValue([book()]);
+    mocked.listBooks.mockReset().mockResolvedValue(paginated([book()]));
+    mocked.getBookCategories.mockReset().mockResolvedValue(['Technology']);
+    mocked.getBookDetail.mockReset().mockResolvedValue(bookDetail(book()));
     mocked.getMembers.mockReset().mockResolvedValue([member()]);
     mocked.getLoans.mockReset().mockResolvedValue([loan()]);
     vi.mocked(onUnauthorized).mockImplementation((handler) => {
@@ -66,7 +72,7 @@ describe('App authentication and role-based access', () => {
     renderApp('/books');
     expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-    expect(mocked.getBooks).not.toHaveBeenCalled();
+    expect(mocked.listBooks).not.toHaveBeenCalled();
   });
 
   it('logs in a User who can search books, borrow and return, without admin features', async () => {
@@ -75,7 +81,7 @@ describe('App authentication and role-based access', () => {
 
     expect(mocked.login).toHaveBeenCalledWith('user', '1234');
     expect(setAuthToken).toHaveBeenLastCalledWith('user-token');
-    expect(await screen.findByText('Clean Code')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Clean Code' })).toBeInTheDocument();
     expect(screen.getByLabelText('Search books')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '+ Add book' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();

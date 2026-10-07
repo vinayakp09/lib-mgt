@@ -1,4 +1,4 @@
-import type { Book, Loan, Member } from '../types';
+import type { Book, BookDetail, Loan, Member, Paginated, Review } from '../types';
 
 export const book = (overrides: Partial<Book> = {}): Book => ({
   id: 1,
@@ -9,7 +9,31 @@ export const book = (overrides: Partial<Book> = {}): Book => ({
   publishedYear: 2008,
   totalCopies: 3,
   availableCopies: 2,
+  coverImageUrl: null,
+  description: 'A handbook of agile software craftsmanship.',
+  averageRating: 4.5,
+  reviewCount: 2,
   createdAt: '2026-01-01T00:00:00.000Z',
+  ...overrides,
+});
+
+export const review = (overrides: Partial<Review> = {}): Review => ({
+  id: 1,
+  reviewerName: 'Ananya Iyer',
+  rating: 5,
+  comment: 'Changed how I write code.',
+  createdAt: '2026-02-01T00:00:00.000Z',
+  ...overrides,
+});
+
+export const bookDetail = (base: Book, reviews: Review[] = []): BookDetail => ({ ...base, reviews });
+
+export const paginated = <T,>(items: T[], overrides: Partial<Paginated<T>> = {}): Paginated<T> => ({
+  items,
+  total: items.length,
+  page: 1,
+  pageSize: 8,
+  totalPages: 1,
   ...overrides,
 });
 

@@ -16,12 +16,15 @@ export function BookForm({ initial, onSubmit, onCancel }: Props) {
     category: initial?.category ?? 'General',
     publishedYear: initial?.publishedYear?.toString() ?? '',
     totalCopies: String(initial?.totalCopies ?? 1),
+    coverImageUrl: initial?.coverImageUrl ?? '',
+    description: initial?.description ?? '',
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const set = (field: keyof BookFormValues) => (e: ChangeEvent<HTMLInputElement>) =>
-    setValues((v) => ({ ...v, [field]: e.target.value }));
+  const set =
+    (field: keyof BookFormValues) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setValues((v) => ({ ...v, [field]: e.target.value }));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,6 +43,8 @@ export function BookForm({ initial, onSubmit, onCancel }: Props) {
         category: values.category.trim() || 'General',
         publishedYear: values.publishedYear ? Number(values.publishedYear) : null,
         totalCopies: Number(values.totalCopies),
+        coverImageUrl: values.coverImageUrl.trim() || null,
+        description: values.description.trim() || null,
       });
     } catch (err) {
       setError(errorMessage(err));
@@ -76,6 +81,14 @@ export function BookForm({ initial, onSubmit, onCancel }: Props) {
         <label>
           Total copies
           <input type="number" min={1} value={values.totalCopies} onChange={set('totalCopies')} required />
+        </label>
+        <label className="span-all">
+          Cover image URL
+          <input type="url" placeholder="https://…" value={values.coverImageUrl} onChange={set('coverImageUrl')} />
+        </label>
+        <label className="span-all">
+          Description
+          <textarea rows={4} maxLength={2000} value={values.description} onChange={set('description')} />
         </label>
       </div>
       <div className="form-actions">

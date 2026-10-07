@@ -5,6 +5,8 @@ export interface BookFormValues {
   category: string;
   publishedYear: string;
   totalCopies: string;
+  coverImageUrl: string;
+  description: string;
 }
 
 export interface MemberFormValues {
@@ -25,7 +27,24 @@ export function validateBook(values: BookFormValues): string | null {
     const year = Number(values.publishedYear);
     if (!Number.isInteger(year) || year < 0 || year > 2100) return 'Published year is invalid';
   }
+  if (values.coverImageUrl.trim() && !isHttpUrl(values.coverImageUrl.trim())) {
+    return 'Cover image URL must start with http:// or https://';
+  }
+  if (values.description.length > 2000) return 'Description must be at most 2000 characters';
   return null;
+}
+
+export function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function formatRating(rating: number | null): string {
+  return rating === null ? 'No ratings yet' : `${rating.toFixed(1)} / 5`;
 }
 
 export function validateMember(values: MemberFormValues): string | null {
