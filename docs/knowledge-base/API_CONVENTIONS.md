@@ -19,9 +19,13 @@ Access: **public** = no token; **any** = admin or user token; **admin** = admin 
 | POST | `/api/v1/auth/login` | `{ role: "admin" \| "user", password }` | public | 200 `LoginResponse` |
 | GET | `/api/v1/auth/me` | – | any | 200 `{ role }` |
 | GET | `/api/dashboard` | – | any | 200 `DashboardStats` |
+| GET | `/api/v1/books` | `?search=&category=&availability=available\|unavailable&sort=title\|author\|publishedYear\|averageRating\|createdAt&order=asc\|desc&page=&pageSize=` (pageSize 1–50, default 10) | any | 200 `Paginated<Book>` |
+| GET | `/api/v1/books/categories` | – | any | 200 `string[]` (distinct, sorted) |
+| GET | `/api/v1/books/:id` | – | any | 200 `BookDetail` (book + reviews, newest first) |
+| POST | `/api/v1/books/:id/reviews` | `{ reviewerName, rating (1–5 integer), comment? }` | any | 201 `BookDetail` (rating summary recomputed) |
 | GET | `/api/books` | `?search=` (title/author/ISBN/category, case-insensitive contains) | any | 200 `Book[]` sorted by title |
 | GET | `/api/books/:id` | – | any | 200 `Book` |
-| POST | `/api/books` | `{ title, author, isbn, category?, publishedYear?, totalCopies }` | admin | 201 `Book` |
+| POST | `/api/books` | `{ title, author, isbn, category?, publishedYear?, totalCopies, coverImageUrl?, description? }` (`coverImageUrl` must be an http(s) URL ≤ 500 chars; `description` ≤ 2000) | admin | 201 `Book` |
 | PATCH | `/api/books/:id` | any subset of the POST fields | admin | 200 `Book` |
 | DELETE | `/api/books/:id` | – | admin | 204 (no body) |
 | GET | `/api/members` | `?search=` (name/email/phone) | any | 200 `Member[]` sorted by name |
@@ -47,7 +51,17 @@ Access: **public** = no token; **any** = admin or user token; **admin** = admin 
 // Book
 { "id": 1, "title": "Dune", "author": "Frank Herbert", "isbn": "9780441172719",
   "category": "Science Fiction", "publishedYear": 1965,
-  "totalCopies": 3, "availableCopies": 2, "createdAt": "2026-10-05T11:32:00.000Z" }
+  "totalCopies": 3, "availableCopies": 2,
+  "coverImageUrl": "https://covers.openlibrary.org/b/isbn/9780441172719-M.jpg?default=false",
+  "description": "…", "averageRating": 4.5, "reviewCount": 2,   // averageRating is null with no reviews
+  "createdAt": "2026-10-05T11:32:00.000Z" }
+
+// BookDetail = Book + reviews (newest first)
+{ /* Book */, "reviews": [ { "id": 3, "reviewerName": "John Smith", "rating": 4,
+  "comment": null, "createdAt": "..." } ] }
+
+// Paginated<T>
+{ "items": [ /* T */ ], "total": 16, "page": 1, "pageSize": 10, "totalPages": 2 }
 
 // Member
 { "id": 1, "name": "Aarav Sharma", "email": "aarav.sharma@example.com",
@@ -67,7 +81,7 @@ Access: **public** = no token; **any** = admin or user token; **admin** = admin 
 
 - Dates are **ISO-8601 UTC strings**.
 - Nullable fields are returned as `null`, never omitted.
-- Collections are returned as a **bare JSON array** (no envelope).
+- Unversioned collections are returned as a **bare JSON array** (no envelope); paginated `/api/v1` lists use the `Paginated<T>` envelope.
 
 ## Validation
 
@@ -118,8 +132,10 @@ Services throw Nest exceptions (`BadRequestException`, `NotFoundException`, `Con
 
 ## Pagination
 
-- **Not implemented.** List endpoints return all matching rows (catalogue sizes are small). Dashboard `recentLoans` and `topBooks` are capped at 5.
-- If needed, add `?page=&pageSize=` (or `?limit=&offset=`) to the query DTO and return `{ items, total, page, pageSize }` — as a new, versioned shape so existing clients keep working.
+- `GET /api/v1/books` (REQ-108) is paginated: `?page=` (≥ 1, default 1) and `?pageSize=` (1–50, default 10), returning `Paginated<T>`. A page past the end returns `items: []` with the real `total` / `totalPages`.
+- Sorting is `?sort=<field>&order=asc|desc` with a whitelisted field list (`BOOK_SORT_FIELDS`); nulls sort last and `id` is the tie-breaker so pages are stable.
+- The unversioned list endpoints still return all matching rows. Dashboard `recentLoans` and `topBooks` are capped at 5.
+- New paginated lists should follow the same query DTO + `Paginated<T>` shape (see `backend/src/books/dto/book-list-query.dto.ts`).
 
 ## How the frontend calls the API
 

@@ -21,6 +21,21 @@
 | `publishedYear` | integer | nullable | 0–2100 |
 | `totalCopies` | integer | not null, default 1 | 1–1000 |
 | `availableCopies` | integer | not null, default 1 | invariant: `0 ≤ availableCopies ≤ totalCopies` |
+| `coverImageUrl` | varchar | nullable | http(s) URL ≤ 500 chars (REQ-108) |
+| `description` | text | nullable | ≤ 2000 chars (REQ-108) |
+| `averageRating` | real | nullable | denormalized mean of `reviews.rating`, 1 decimal; `NULL` = no reviews (REQ-108) |
+| `reviewCount` | integer | not null, default 0 | denormalized count of `reviews` (REQ-108) |
+| `createdAt` | datetime | not null, set on insert | |
+
+### `reviews` (REQ-108)
+
+| Column | Type | Constraints / default | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | PK, autoincrement | |
+| `bookId` | integer | not null, FK → `books.id` **ON DELETE CASCADE** | |
+| `reviewerName` | varchar | not null | ≤ 80 chars, trimmed |
+| `rating` | integer | not null | 1–5 |
+| `comment` | text | nullable | ≤ 1000 chars; blank stored as `NULL` |
 | `createdAt` | datetime | not null, set on insert | |
 
 ### `members`
@@ -49,8 +64,10 @@
 ## Relations
 
 ```
-members 1 ──< loans >── 1 books
+members 1 ──< loans >── 1 books 1 ──< reviews
 ```
+
+- `Review.book` is `ManyToOne` (not eager); `Book.reviews` is `OneToMany`. Deleting a book deletes its reviews.
 
 - `Loan.book` and `Loan.member` are `ManyToOne`, **eager** — every loan query returns the full book and member objects.
 - `Book.loans` / `Member.loans` are `OneToMany`, not eager.
@@ -63,6 +80,7 @@ members 1 ──< loans >── 1 books
    - Editing `totalCopies` recomputes `availableCopies`; rejected if it would go below copies on loan.
 2. A member has at most **5** loans with `returnDate IS NULL`, and never two for the same book.
 3. A book or member with an unreturned loan cannot be deleted. Deleting one with only returned loans cascades and removes that loan history.
+4. `books.averageRating` / `reviewCount` always match the book's `reviews`; `BooksService.addReview` inserts the review and recomputes both in **one transaction** (`summarizeRatings` in `backend/src/books/review.rules.ts`). They are stored so the list can sort by rating.
 
 ## Schema management / migration tool
 
@@ -75,14 +93,15 @@ members 1 ──< loans >── 1 books
 - **No destructive change without backfill:** to rename/remove a column or tighten a constraint, first add the new column, backfill data, switch code to it, and only later remove the old one — or switch to migrations first.
 - Before any non-additive change, back up `database/library.sqlite` (it is a single file — copy it).
 - If moving beyond local use: set `synchronize: false`, generate migrations with the TypeORM CLI (`typeorm migration:generate`) into `backend/src/database/migrations/`, and run them on startup (`migrationsRun: true`).
+- REQ-108 was additive only (four new `books` columns — nullable or defaulted — and the new `reviews` table), so `synchronize` upgrades an existing `library.sqlite` in place without data loss. Existing books keep `NULL` cover/description and `0` reviews until edited or re-seeded.
 - Every new entity must be added to the `entities` array exported from `app.module.ts` (used by both the app and tests).
 - Dates are stored by TypeORM as UTC datetime strings and hydrated back to JS `Date`.
 
 ## Seed / sample data
 
-- Source: `backend/src/database/sample-data.ts` — 16 books, 8 members (1 inactive), 12 loans (some active, 2 overdue, 3 returned incl. one late with a fine). Loan dates are relative to "now", so overdue examples stay overdue.
+- Source: `backend/src/database/sample-data.ts` — 16 books (each with an Open Library cover URL and a description), 16 reviews across several books, 8 members (1 inactive), 12 loans (some active, 2 overdue, 3 returned incl. one late with a fine). Loan and review dates are relative to "now", so overdue examples stay overdue.
 - `SeedService.seed()` runs automatically on app start **only if `books` is empty** (`AUTO_SEED=false` disables).
-- `npm run seed` → `seed({ reset: true })`: clears `loans`, `books`, `members`, resets autoincrement counters (`sqlite_sequence`), and reloads the sample data. **Destroys all existing data.**
+- `npm run seed` → `seed({ reset: true })`: clears `loans`, `reviews`, `books`, `members`, resets autoincrement counters (`sqlite_sequence`), and reloads the sample data. **Destroys all existing data.**
 
 ## Inspecting the data
 

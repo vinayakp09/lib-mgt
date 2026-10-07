@@ -34,7 +34,8 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
 │   │   ├── app.module.ts        # AppModule.register(options): TypeORM, feature modules, ServeStatic
 │   │   ├── config.ts            # PORT, DB_PATH, AUTO_SEED, AUTH_SECRET, frontend dist path
 │   │   ├── auth/                # login endpoint, AuthService (JWT), global AuthGuard, @Public/@Roles
-│   │   ├── books/               # Book entity, DTOs, BooksService, BooksController
+│   │   ├── books/               # Book + Review entities, DTOs, BooksService, BooksController (/api/books),
+│   │   │                        #   BooksV1Controller (/api/v1/books: paginated list, details, reviews), review.rules.ts
 │   │   ├── members/             # Member entity, DTOs, MembersService, MembersController
 │   │   ├── loans/               # Loan entity, DTOs, LoansService, LoansController, loan.rules.ts
 │   │   ├── dashboard/           # DashboardService (aggregates), DashboardController
@@ -49,7 +50,7 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
         ├── api.ts                # the only place that calls fetch(); attaches the Bearer token
         ├── types.ts              # TS types mirroring API responses
         ├── utils.ts              # form validation, date formatting
-        ├── components/           # BookForm, MemberForm, StatusBadge
+        ├── components/           # BookForm, BookDetailPanel, BookCover, StarRating, ReviewForm, MemberForm, StatusBadge
         ├── pages/                # LoginPage, DashboardPage, BooksPage, MembersPage, LoansPage
         └── test/                 # vitest setup + fixtures
 ```
@@ -59,7 +60,7 @@ One repository, one deployable process. npm **workspaces** tie two packages toge
 | Module | Responsibility | Depends on (repositories) |
 | --- | --- | --- |
 | `AuthModule` | `POST /api/v1/auth/login` (role + static password `1234` → JWT), `GET /api/v1/auth/me`; registers the global `AuthGuard` that requires a token on every route and enforces `@Roles('admin')` | `JwtService` (no tables) |
-| `BooksModule` | Catalogue CRUD + search; keeps `availableCopies` consistent on edits | `Book`, `Loan` |
+| `BooksModule` | Catalogue CRUD + search; paginated/sorted/filtered list, book details and reviews (`/api/v1/books`); keeps `availableCopies` and the rating summary consistent | `Book`, `Loan`, `Review` + `DataSource` transactions |
 | `MembersModule` | Member CRUD + search; unique lower-case email | `Member`, `Loan` |
 | `LoansModule` | Issue / return / list loans; all lending rules | `Loan` + `DataSource` transactions over `Book`, `Member` |
 | `DashboardModule` | Read-only aggregate stats | `Book`, `Member`, `Loan` |
@@ -79,7 +80,7 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 | --- | --- | --- | --- |
 | any, while logged out | `LoginPage` | – | `POST /api/v1/auth/login` |
 | `/` | `DashboardPage` | admin, user | `GET /api/dashboard` |
-| `/books` | `BooksPage` (+ `BookForm`) | admin: full; user: read-only (`canManage={false}`) | `GET/POST/PATCH/DELETE /api/books` |
+| `/books` | `BooksPage` — master-detail split view (+ `BookDetailPanel`, `BookForm`, `ReviewForm`) | admin: full; user: read-only catalogue + reviews (`canManage={false}`) | `GET /api/v1/books`, `GET /api/v1/books/categories`, `GET /api/v1/books/:id`, `POST /api/v1/books/:id/reviews`, `POST/PATCH/DELETE /api/books` |
 | `/members` | `MembersPage` (+ `MemberForm`) | admin only (route not registered for users → redirect to `/`) | `GET/POST/PATCH/DELETE /api/members` |
 | `/loans` | `LoansPage` | admin, user | `GET /api/loans?status=`, `GET /api/books`, `GET /api/members`, `POST /api/loans`, `PATCH /api/loans/:id/return` |
 | `*` | redirect to `/` | – | – |
@@ -88,6 +89,7 @@ Borrow and return run inside `dataSource.transaction(...)` so the loan row and t
 - Hiding admin UI is for usability only — the backend `AuthGuard` is what enforces permissions.
 - Other state: plain React `useState`/`useEffect` per page; no global store. Pages reload their list after every mutation.
 - Search inputs are debounced 250 ms before calling the API.
+- **Books split view (REQ-108):** the left pane is a server-paginated table (8 per page) with search, category / availability filters and sort; the right pane shows the selected book (cover, rating, facts, description, reviews) or the inline add/edit form. The first listed book is selected by default, and the selection moves to the first row whenever the selected book leaves the list (page change, filter, delete). A newly added book is pinned to the top of the list with a "New" badge until the query changes, so it is visible even if the current sort/page would not include it. Covers that fail to load fall back to a lettered placeholder (`BookCover`).
 - Client-side validation (`utils.ts`) mirrors the backend DTO rules; server errors are still shown via `ApiError.message`.
 - Styling: single `index.css`, no UI library.
 

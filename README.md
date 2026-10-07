@@ -15,7 +15,8 @@ Detailed docs live in [`docs/knowledge-base/`](docs/knowledge-base/): [Project o
 ## Features
 
 - **Role-based login** – choose **User** or **Admin** and enter the default password **`1234`**. Admins have full access; users can search books, borrow and return (no book/member editing)
-- **Books** – catalogue CRUD, search by title/author/ISBN/category, copy tracking (available / total)
+- **Books** – master-detail split view: a paginated list with search (title/author/ISBN/category), category and availability filters and sorting (title, author, year, rating, recently added); the selected book's cover, rating, description and reviews alongside it; inline add/edit/delete for admins; copy tracking (available / total)
+- **Reviews** – anyone signed in can rate a book 1–5 stars with an optional comment; the average rating is shown in the list and is sortable
 - **Members** – registration, active/inactive status, search
 - **Loans** – issue and return books, due dates, overdue detection, late fines
 - **Dashboard** – totals, overdue count, recent loans, most borrowed books
@@ -77,9 +78,13 @@ All routes are prefixed with `/api`. Every route except login needs `Authorizati
 | POST   | `/v1/auth/login`       | Log in `{ role: "admin" \| "user", password: "1234" }` → `{ success, role, token, expiresIn }` |
 | GET    | `/v1/auth/me`          | Role behind the current token                        |
 | GET    | `/dashboard`           | Statistics, recent loans, top books                  |
-| GET    | `/books?search=`       | List / search books                                  |
+| GET    | `/v1/books?search=&category=&availability=&sort=&order=&page=&pageSize=` | Paginated, filtered, sorted book list |
+| GET    | `/v1/books/categories` | Distinct categories                                  |
+| GET    | `/v1/books/:id`        | Book with its reviews                                |
+| POST   | `/v1/books/:id/reviews` | Add a review `{ reviewerName, rating, comment? }`   |
+| GET    | `/books?search=`       | List / search books (all rows)                       |
 | GET    | `/books/:id`           | Get a book                                           |
-| POST   | `/books`               | Create `{ title, author, isbn, category?, publishedYear?, totalCopies }` |
+| POST   | `/books`               | Create `{ title, author, isbn, category?, publishedYear?, totalCopies, coverImageUrl?, description? }` |
 | PATCH  | `/books/:id`           | Update a book                                        |
 | DELETE | `/books/:id`           | Delete a book (no active loans)                      |
 | GET    | `/members?search=`     | List / search members                                |

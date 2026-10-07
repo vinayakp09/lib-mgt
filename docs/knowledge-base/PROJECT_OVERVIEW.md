@@ -19,7 +19,7 @@ The app is meant for a trusted staff machine / local network; there is still no 
 
 0. **Log in** – any page shows the login screen until the visitor picks *User* or *Admin* and enters `1234`. The session is remembered in the browser for 8 hours; *Log out* is in the sidebar.
 1. **Dashboard** (`/`) – see totals (titles, copies, available copies, members, books on loan, overdue), the 5 most recent loans and the top 5 most-borrowed books.
-2. **Manage books** (`/books`) – search (title / author / ISBN / category); admins also add, edit, delete. Each book tracks `totalCopies` and `availableCopies`.
+2. **Browse & manage books** (`/books`) – a split view: the left list can be searched (title / author / ISBN / category), filtered by category and availability, sorted (title, author, year, rating, recently added) and paged; the right pane shows the selected book's cover, rating, description and reviews. Anyone can post a review (name, 1–5 stars, optional comment); admins also add, edit and delete books inline. Each book tracks `totalCopies` and `availableCopies`.
 3. **Manage members** (`/members`, admin only) – search (name / email / phone), register, edit, activate/deactivate, delete.
 4. **Issue a book** (`/loans`) – choose an *active* member and a book with an available copy, optionally change loan length (default 14 days). Availability drops by one.
 5. **Return a book** (`/loans`) – click *Return*; the fine is calculated if late and availability increases by one.
@@ -40,6 +40,8 @@ The app is meant for a trusted staff machine / local network; there is still no 
 | Reduce total copies | Cannot go below the number currently on loan | `books.service.ts` |
 | ISBN | Unique, 10–17 chars | DTO + DB unique index |
 | Member email | Unique, stored lower-case | `members.service.ts` |
+| Reviews | Rating is a whole number 1–5; the book's average (1 decimal) and count update when a review is posted; reviews are deleted with their book | `books.service.ts`, `review.rules.ts` |
+| Cover image | Optional http(s) URL; a placeholder is shown if missing or broken | DTO, `BookCover.tsx` |
 
 ## Glossary
 
@@ -57,7 +59,8 @@ The app is meant for a trusted staff machine / local network; there is still no 
 | **Days overdue** | Whole calendar days between due date and now (or the return date). |
 | **Fine** | `daysOverdue × 10`, stored on the loan when it is returned. |
 | **On loan / outstanding** | Loans with no `returnDate` (includes overdue). |
-| **Seed / sample data** | 16 books, 8 members, 12 loans loaded by `npm run seed` or automatically on first start. |
+| **Review / rating** | A reader's 1–5 star rating with an optional comment on a book; the book shows the average and count. |
+| **Seed / sample data** | 16 books (with covers, descriptions), 16 reviews, 8 members, 12 loans loaded by `npm run seed` or automatically on first start. |
 
 ## Tech summary
 
