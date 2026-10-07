@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateBookDto {
   @IsString()
@@ -30,4 +30,14 @@ export class CreateBookDto {
   @Min(1)
   @Max(1000)
   totalCopies: number;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(500)
+  coverImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string | null;
 }

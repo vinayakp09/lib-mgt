@@ -98,6 +98,81 @@ describe('Library API (e2e)', () => {
     });
   });
 
+  describe('book list & details (REQ-108)', () => {
+    it('GET /api/v1/books returns a paginated, sorted page', async () => {
+      const res = await user().get('/api/v1/books').query({ pageSize: 5, sort: 'publishedYear', order: 'desc' }).expect(200);
+      expect(res.body).toMatchObject({ page: 1, pageSize: 5, total: sampleBooks.length, totalPages: Math.ceil(sampleBooks.length / 5) });
+      expect(res.body.items).toHaveLength(5);
+      expect(res.body.items[0].title).toBe('Introduction to Algorithms');
+      expect(res.body.items[0]).toEqual(
+        expect.objectContaining({ coverImageUrl: expect.any(String), description: expect.any(String), reviewCount: expect.any(Number) }),
+      );
+    });
+
+    it('GET /api/v1/books filters by search, category and availability', async () => {
+      const tech = await user().get('/api/v1/books').query({ category: 'Technology', search: 'code' }).expect(200);
+      expect(tech.body.items.map((b: { title: string }) => b.title)).toEqual(['Clean Code']);
+
+      const available = await user().get('/api/v1/books').query({ availability: 'available', pageSize: 50 }).expect(200);
+      expect(available.body.items.every((b: { availableCopies: number }) => b.availableCopies > 0)).toBe(true);
+    });
+
+    it('GET /api/v1/books validates query params', async () => {
+      await user().get('/api/v1/books').query({ pageSize: 500 }).expect(400);
+      await user().get('/api/v1/books').query({ page: 0 }).expect(400);
+      await user().get('/api/v1/books').query({ sort: 'isbn; DROP TABLE books' }).expect(400);
+      await user().get('/api/v1/books').query({ order: 'sideways' }).expect(400);
+      await user().get('/api/v1/books').query({ availability: 'maybe' }).expect(400);
+    });
+
+    it('GET /api/v1/books/categories lists distinct categories', async () => {
+      const res = await user().get('/api/v1/books/categories').expect(200);
+      expect(res.body).toEqual([...new Set(sampleBooks.map((b) => b.category))].sort());
+    });
+
+    it('GET /api/v1/books/:id returns details with reviews; 404 for unknown', async () => {
+      const page = await user().get('/api/v1/books').query({ search: '1984' }).expect(200);
+      const res = await user().get(`/api/v1/books/${page.body.items[0].id}`).expect(200);
+      expect(res.body).toMatchObject({ title: '1984', reviewCount: 3, averageRating: 4.7 });
+      expect(res.body.reviews).toHaveLength(3);
+      expect(res.body.reviews[0]).toEqual(
+        expect.objectContaining({ reviewerName: expect.any(String), rating: expect.any(Number), createdAt: expect.any(String) }),
+      );
+      await user().get('/api/v1/books/9999').expect(404);
+    });
+
+    it('POST /api/v1/books/:id/reviews adds a review for any signed-in role and validates input', async () => {
+      const page = await user().get('/api/v1/books').query({ search: 'great gatsby' }).expect(200);
+      const id = page.body.items[0].id;
+
+      const res = await user().post(`/api/v1/books/${id}/reviews`).send({ reviewerName: 'Tester', rating: 5, comment: 'Loved it' }).expect(201);
+      expect(res.body).toMatchObject({ reviewCount: 2, averageRating: 4 });
+      expect(res.body.reviews[0]).toMatchObject({ reviewerName: 'Tester', rating: 5, comment: 'Loved it' });
+
+      await user().post(`/api/v1/books/${id}/reviews`).send({ reviewerName: 'X', rating: 6 }).expect(400);
+      await user().post(`/api/v1/books/${id}/reviews`).send({ rating: 3 }).expect(400);
+      await client().post(`/api/v1/books/${id}/reviews`).send({ reviewerName: 'X', rating: 3 }).expect(401);
+    });
+
+    it('admin can set cover and description; invalid cover URL is rejected', async () => {
+      const book = (
+        await admin().post('/api/books')
+          .send({ title: 'Domain-Driven Design', author: 'Eric Evans', isbn: '9780321125217', totalCopies: 1, coverImageUrl: 'https://example.com/ddd.jpg', description: 'Tackling complexity.' })
+          .expect(201)
+      ).body;
+      expect(book).toMatchObject({ coverImageUrl: 'https://example.com/ddd.jpg', description: 'Tackling complexity.' });
+
+      await admin().patch(`/api/books/${book.id}`).send({ coverImageUrl: 'javascript:alert(1)' }).expect(400);
+      await admin().patch(`/api/books/${book.id}`).send({ coverImageUrl: 'not a url' }).expect(400);
+      await admin().delete(`/api/books/${book.id}`).expect(204);
+    });
+
+    it('requires a token for the v1 book endpoints', async () => {
+      await client().get('/api/v1/books').expect(401);
+      await client().get('/api/v1/books/1').expect(401);
+    });
+  });
+
   it('GET /api/books returns the seeded catalogue', async () => {
     const res = await admin().get('/api/books').expect(200);
     expect(res.body).toHaveLength(sampleBooks.length);

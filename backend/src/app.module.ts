@@ -6,6 +6,7 @@ import { dirname } from 'path';
 import { AuthModule } from './auth/auth.module';
 import { Book } from './books/book.entity';
 import { BooksModule } from './books/books.module';
+import { Review } from './books/review.entity';
 import { config } from './config';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
@@ -20,7 +21,7 @@ export interface AppOptions {
   autoSeed: boolean;
 }
 
-export const entities = [Book, Member, Loan];
+export const entities = [Book, Member, Loan, Review];
 
 @Module({})
 export class AppModule {

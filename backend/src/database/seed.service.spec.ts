@@ -4,7 +4,7 @@ import { DashboardService } from '../dashboard/dashboard.service';
 import { LoansService } from '../loans/loans.service';
 import { MembersService } from '../members/members.service';
 import { createTestingModule } from '../testing/test-db';
-import { sampleBooks, sampleLoans, sampleMembers } from './sample-data';
+import { sampleBooks, sampleLoans, sampleMembers, sampleReviews } from './sample-data';
 import { AUTO_SEED, SeedService } from './seed.service';
 
 describe('SeedService + DashboardService', () => {
@@ -33,6 +33,26 @@ describe('SeedService + DashboardService', () => {
     expect(await moduleRef.get(BooksService).findAll()).toHaveLength(sampleBooks.length);
     expect(await moduleRef.get(MembersService).findAll()).toHaveLength(sampleMembers.length);
     expect(await moduleRef.get(LoansService).findAll()).toHaveLength(sampleLoans.length);
+  });
+
+  it('seeds covers, descriptions and reviews with matching rating summaries', async () => {
+    await seed.seed();
+    const booksService = moduleRef.get(BooksService);
+    const all = await booksService.findAll();
+    const mockingbird = all.find((b) => b.title === 'To Kill a Mockingbird')!;
+
+    expect(all.every((b) => b.coverImageUrl?.startsWith('https://') && b.description)).toBe(true);
+
+    const detail = await booksService.findDetail(mockingbird.id);
+    const expected = sampleReviews.filter((r) => r.book === 0);
+    expect(detail.reviews).toHaveLength(expected.length);
+    expect(detail.reviewCount).toBe(expected.length);
+    expect(detail.averageRating).toBe(4.5);
+    // newest first: createdAt comes from the sample's daysAgo
+    expect(detail.reviews[0].reviewerName).toBe('John Smith');
+
+    const totalReviews = all.reduce((sum, b) => sum + b.reviewCount, 0);
+    expect(totalReviews).toBe(sampleReviews.length);
   });
 
   it('produces consistent dashboard statistics', async () => {

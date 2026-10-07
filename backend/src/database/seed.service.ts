@@ -1,10 +1,12 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Book } from '../books/book.entity';
+import { Review } from '../books/review.entity';
+import { summarizeRatings } from '../books/review.rules';
 import { Loan } from '../loans/loan.entity';
 import { addDays, calculateFine } from '../loans/loan.rules';
 import { Member } from '../members/member.entity';
-import { sampleBooks, sampleLoans, sampleMembers } from './sample-data';
+import { sampleBooks, sampleLoans, sampleMembers, sampleReviews } from './sample-data';
 
 export const AUTO_SEED = 'AUTO_SEED';
 
@@ -31,16 +33,37 @@ export class SeedService implements OnApplicationBootstrap {
       }
 
       await manager.clear(Loan);
+      await manager.clear(Review);
       await manager.clear(Book);
       await manager.clear(Member);
-      await manager.query(`DELETE FROM sqlite_sequence WHERE name IN ('loans', 'books', 'members')`);
+      await manager.query(
+        `DELETE FROM sqlite_sequence WHERE name IN ('loans', 'reviews', 'books', 'members')`,
+      );
 
+      const now = new Date();
       const books = await manager.save(
-        sampleBooks.map((book) => manager.create(Book, { ...book, availableCopies: book.totalCopies })),
+        sampleBooks.map((book, index) => {
+          const ratings = sampleReviews.filter((r) => r.book === index).map((r) => r.rating);
+          return manager.create(Book, {
+            ...book,
+            availableCopies: book.totalCopies,
+            ...summarizeRatings(ratings),
+          });
+        }),
+      );
+      await manager.save(
+        sampleReviews.map((review) =>
+          manager.create(Review, {
+            book: books[review.book],
+            reviewerName: review.reviewerName,
+            rating: review.rating,
+            comment: review.comment,
+            createdAt: addDays(now, -review.daysAgo),
+          }),
+        ),
       );
       const members = await manager.save(sampleMembers.map((member) => manager.create(Member, member)));
 
-      const now = new Date();
       const loans = sampleLoans.map((spec) => {
         const book = books[spec.book];
         const loanDate = addDays(now, -spec.borrowedDaysAgo);
@@ -66,7 +89,7 @@ export class SeedService implements OnApplicationBootstrap {
 
     if (seeded) {
       this.logger.log(
-        `Seeded ${sampleBooks.length} books, ${sampleMembers.length} members and ${sampleLoans.length} loans`,
+        `Seeded ${sampleBooks.length} books, ${sampleReviews.length} reviews, ${sampleMembers.length} members and ${sampleLoans.length} loans`,
       );
     }
     return seeded;
