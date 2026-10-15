@@ -7,8 +7,11 @@ import type {
   Loan,
   LoanInput,
   LoanStatus,
+  CheckoutSessionResponse,
   LoginResponse,
   Member,
+  SuperAdminLoginResponse,
+  TenantListItem,
   MemberInput,
   Paginated,
   ReviewInput,
@@ -85,8 +88,22 @@ const query = (params: Record<string, string | number | undefined>) => {
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const api = {
-  login: (role: Role, password: string) =>
-    request<LoginResponse>('/v1/auth/login', json('POST', { role, password })),
+  login: (tenantSlug: string, role: Role, password: string) =>
+    request<LoginResponse>('/v1/auth/login', json('POST', { tenantSlug, role, password })),
+
+  superAdminLogin: (email: string, password: string) =>
+    request<SuperAdminLoginResponse>('/v1/super-admin/auth/login', json('POST', { email, password })),
+
+  listTenants: () => request<TenantListItem[]>('/v1/admin/tenants'),
+
+  recordOfflinePayment: (tenantId: number, years = 1) =>
+    request<{ tenantId: number; expiresAt: string }>(
+      `/v1/admin/tenants/${tenantId}/offline-payment`,
+      json('POST', { years }),
+    ),
+
+  createCheckoutSession: (input: { collegeName: string; slug: string; contactEmail: string }) =>
+    request<CheckoutSessionResponse>('/v1/subscriptions/checkout-session', json('POST', input)),
 
   getDashboard: () => request<DashboardStats>('/dashboard'),
 

@@ -48,9 +48,17 @@ const navLinks = () =>
 
 describe('App authentication and role-based access', () => {
   beforeEach(() => {
-    mocked.login.mockReset().mockImplementation(async (role: Role, password: string) => {
+    mocked.login.mockReset().mockImplementation(async (_tenant: string, role: Role, password: string) => {
       if (password !== '1234') throw new Error('Invalid role or password');
-      return { success: true, role, token: `${role}-token`, expiresIn: 3600 };
+      return {
+        success: true,
+        role,
+        tenantSlug: 'demo',
+        tenantId: 1,
+        subscriptionExpiresAt: '2027-01-01T00:00:00.000Z',
+        token: `${role}-token`,
+        expiresIn: 3600,
+      };
     });
     mocked.getDashboard.mockReset().mockResolvedValue({
       totalTitles: 1, totalCopies: 3, availableCopies: 2, totalMembers: 1, activeMembers: 1,
@@ -79,7 +87,7 @@ describe('App authentication and role-based access', () => {
     renderApp('/books');
     await logIn('User');
 
-    expect(mocked.login).toHaveBeenCalledWith('user', '1234');
+    expect(mocked.login).toHaveBeenCalledWith('demo', 'user', '1234');
     expect(setAuthToken).toHaveBeenLastCalledWith('user-token');
     expect(await screen.findByRole('heading', { name: 'Clean Code' })).toBeInTheDocument();
     expect(screen.getByLabelText('Search books')).toBeInTheDocument();
@@ -105,7 +113,7 @@ describe('App authentication and role-based access', () => {
     renderApp('/books');
     await logIn('Admin');
 
-    expect(mocked.login).toHaveBeenCalledWith('admin', '1234');
+    expect(mocked.login).toHaveBeenCalledWith('demo', 'admin', '1234');
     expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Add book' })).toBeInTheDocument();
     expect(navLinks()).toEqual(['Dashboard', 'Books', 'Members', 'Loans']);
@@ -128,7 +136,14 @@ describe('App authentication and role-based access', () => {
     const { unmount } = renderApp();
     await logIn('Admin');
     await screen.findByRole('heading', { name: 'Dashboard' });
-    expect(JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY)!)).toEqual({ role: 'admin', token: 'admin-token' });
+    expect(JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY)!)).toEqual({
+      kind: 'college',
+      role: 'admin',
+      token: 'admin-token',
+      tenantSlug: 'demo',
+      tenantId: 1,
+      subscriptionExpiresAt: '2027-01-01T00:00:00.000Z',
+    });
 
     unmount();
     renderApp();

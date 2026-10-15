@@ -3,13 +3,14 @@ import { api, onUnauthorized, setAuthToken } from './api';
 import type { Role, Session } from './types';
 
 export const SESSION_STORAGE_KEY = 'lms.session';
+export const DEFAULT_TENANT_SLUG = 'demo';
 
 interface AuthContextValue {
   session: Session | null;
   isAdmin: boolean;
   /** Set when the previous session ended because the server rejected the token. */
   notice: string | null;
-  login: (role: Role, password: string) => Promise<void>;
+  login: (tenantSlug: string, role: Role, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -18,8 +19,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 function readStoredSession(): Session | null {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) ?? 'null');
-    if ((stored?.role === 'admin' || stored?.role === 'user') && typeof stored.token === 'string') {
-      return { role: stored.role, token: stored.token };
+    if (
+      stored?.kind === 'college' &&
+      (stored?.role === 'admin' || stored?.role === 'user') &&
+      typeof stored.token === 'string' &&
+      typeof stored.tenantSlug === 'string'
+    ) {
+      return stored as Session;
     }
   } catch {
     // corrupted entry: treat as logged out
@@ -30,7 +36,6 @@ function readStoredSession(): Session | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(() => {
     const stored = readStoredSession();
-    // Set synchronously so the first page fetches already carry the token.
     setAuthToken(stored?.token ?? null);
     return stored;
   });
@@ -43,9 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNotice(message);
   }, []);
 
-  const login = useCallback(async (role: Role, password: string) => {
-    const result = await api.login(role, password);
-    const next: Session = { role: result.role, token: result.token };
+  const login = useCallback(async (tenantSlug: string, role: Role, password: string) => {
+    const result = await api.login(tenantSlug.trim().toLowerCase(), role, password);
+    const next: Session = {
+      kind: 'college',
+      role: result.role,
+      token: result.token,
+      tenantSlug: result.tenantSlug,
+      tenantId: result.tenantId,
+      subscriptionExpiresAt: result.subscriptionExpiresAt,
+    };
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
     setAuthToken(next.token);
     setNotice(null);

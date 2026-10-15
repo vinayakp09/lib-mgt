@@ -1,9 +1,17 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique } from 'typeorm';
 import { Loan } from '../loans/loan.entity';
+import { Tenant } from '../tenancy/tenant.entity';
 import { Review } from './review.entity';
 
 @Entity('books')
+@Unique(['tenantId', 'isbn'])
 export class Book {
+  @Column()
+  tenantId: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  tenant: Tenant;
+
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -13,7 +21,7 @@ export class Book {
   @Column()
   author: string;
 
-  @Column({ unique: true })
+  @Column()
   isbn: string;
 
   @Column({ default: 'General' })

@@ -5,6 +5,7 @@ import { LoansService } from '../loans/loans.service';
 import { MembersService } from '../members/members.service';
 import { createTestingModule } from '../testing/test-db';
 import { sampleBooks, sampleLoans, sampleMembers, sampleReviews } from './sample-data';
+import { AdminAuthService } from '../admin/admin-auth.service';
 import { AUTO_SEED, SeedService } from './seed.service';
 
 describe('SeedService + DashboardService', () => {
@@ -14,6 +15,7 @@ describe('SeedService + DashboardService', () => {
   beforeEach(async () => {
     moduleRef = await createTestingModule([
       { provide: AUTO_SEED, useValue: false },
+      { provide: AdminAuthService, useValue: { ensureSeedAdmin: jest.fn() } },
       SeedService,
       BooksService,
       MembersService,

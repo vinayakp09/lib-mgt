@@ -1,11 +1,18 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Book } from '../books/book.entity';
 import { Member } from '../members/member.entity';
+import { Tenant } from '../tenancy/tenant.entity';
 
 @Entity('loans')
 export class Loan {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column()
+  tenantId: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  tenant: Tenant;
 
   @ManyToOne(() => Book, (book) => book.loans, { eager: true, nullable: false, onDelete: 'CASCADE' })
   book: Book;

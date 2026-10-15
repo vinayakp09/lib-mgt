@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api';
@@ -15,9 +16,11 @@ const mocked = vi.mocked(api);
 
 const renderLogin = () =>
   render(
-    <AuthProvider>
-      <LoginPage />
-    </AuthProvider>,
+    <MemoryRouter>
+      <AuthProvider>
+        <LoginPage />
+      </AuthProvider>
+    </MemoryRouter>,
   );
 
 describe('LoginPage', () => {
@@ -58,7 +61,7 @@ describe('LoginPage', () => {
     await userEvent.type(screen.getByLabelText('Password'), '9999');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    expect(mocked.login).toHaveBeenCalledWith('admin', '9999');
+    expect(mocked.login).toHaveBeenCalledWith('demo', 'admin', '9999');
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid role or password');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });
@@ -79,11 +82,13 @@ describe('LoginPage', () => {
     renderLogin();
 
     await userEvent.tab();
+    expect(screen.getByLabelText('College tenant slug')).toHaveFocus();
+    await userEvent.tab();
     expect(screen.getByRole('radio', { name: /User/ })).toHaveFocus();
     await userEvent.keyboard(' ');
     await userEvent.tab();
     await userEvent.keyboard('1234{Enter}');
 
-    expect(mocked.login).toHaveBeenCalledWith('user', '1234');
+    expect(mocked.login).toHaveBeenCalledWith('demo', 'user', '1234');
   });
 });

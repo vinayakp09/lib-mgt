@@ -1,15 +1,23 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, Unique } from 'typeorm';
 import { Loan } from '../loans/loan.entity';
+import { Tenant } from '../tenancy/tenant.entity';
 
 @Entity('members')
+@Unique(['tenantId', 'email'])
 export class Member {
+  @Column()
+  tenantId: number;
+
+  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  tenant: Tenant;
+
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
   name: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column({ type: 'varchar', nullable: true })

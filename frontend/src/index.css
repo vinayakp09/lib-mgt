@@ -158,6 +158,22 @@ textarea:focus { outline: 2px solid #c7d2fe; border-color: var(--primary); }
 .empty { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .table-scroll { overflow-x: auto; transition: opacity 0.15s; }
 .table-scroll.is-loading { opacity: 0.55; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.data-table th,
+.data-table td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.data-table th { font-weight: 600; color: var(--muted); background: #fafafa; }
+.table-wrap { overflow-x: auto; }
+.tenant-badge { margin: 0 1rem 0.35rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(255,255,255,0.08); font-size: 0.75rem; }
+.subscription-note { margin: 0 1rem 0.75rem; padding: 0 0.25rem; }
+.login-footer { margin-top: 0.75rem; text-align: center; }
+.badge { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 999px; font-size: 0.75rem; text-transform: capitalize; }
+.badge-active { background: #d1fae5; color: #065f46; }
+.badge-expired { background: #fee2e2; color: #991b1b; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.content-inner { padding: 1.25rem; max-width: 1100px; }
+.empty-state { padding: 1rem 1.25rem; }
 .book-table td { vertical-align: middle; padding-top: 0.5rem; padding-bottom: 0.5rem; }
 .book-table th:first-child, .book-table td:first-child { padding-right: 0; width: 44px; }
 .book-row { cursor: pointer; }

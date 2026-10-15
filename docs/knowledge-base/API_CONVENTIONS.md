@@ -16,8 +16,13 @@ Access: **public** = no token; **any** = admin or user token; **admin** = admin 
 
 | Method | Path | Body / query | Access | Success |
 | --- | --- | --- | --- | --- |
-| POST | `/api/v1/auth/login` | `{ role: "admin" \| "user", password }` | public | 200 `LoginResponse` |
-| GET | `/api/v1/auth/me` | – | any | 200 `{ role }` |
+| POST | `/api/v1/auth/login` | `{ tenantSlug, role: "admin" \| "user", password }` | public | 200 `LoginResponse` (403 if subscription expired) |
+| GET | `/api/v1/auth/me` | – | any | 200 `{ role, principal: "tenant", tenantId }` |
+| POST | `/api/v1/super-admin/auth/login` | `{ email, password }` | public | 200 `SuperAdminLoginResponse` |
+| GET | `/api/v1/admin/tenants` | – | super_admin | 200 `TenantListItem[]` |
+| POST | `/api/v1/admin/tenants/:id/offline-payment` | `{ years? }` (1–5, default 1) | super_admin | 200 `{ tenantId, expiresAt }` |
+| POST | `/api/v1/subscriptions/checkout-session` | `{ collegeName, slug, contactEmail }` | public | 200 `{ url, sessionId }` |
+| POST | `/api/v1/payments/stripe/webhook` | Stripe event (raw body) | public | 200 `{ received: true }` |
 | GET | `/api/dashboard` | – | any | 200 `DashboardStats` |
 | GET | `/api/v1/books` | `?search=&category=&availability=available\|unavailable&sort=title\|author\|publishedYear\|averageRating\|createdAt&order=asc\|desc&page=&pageSize=` (pageSize 1–50, default 10) | any | 200 `Paginated<Book>` |
 | GET | `/api/v1/books/categories` | – | any | 200 `string[]` (distinct, sorted) |

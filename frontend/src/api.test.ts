@@ -17,12 +17,12 @@ describe('api client', () => {
 
   it('posts role and password to the v1 login endpoint', async () => {
     const fetchMock = mockFetch(200, { success: true, role: 'user', token: 't', expiresIn: 60 });
-    const result = await api.login('user', '1234');
+    const result = await api.login('demo', 'user', '1234');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/v1/auth/login');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual({ role: 'user', password: '1234' });
+    expect(JSON.parse(init.body)).toEqual({ tenantSlug: 'demo', role: 'user', password: '1234' });
     expect(result.token).toBe('t');
   });
 
@@ -41,7 +41,7 @@ describe('api client', () => {
     const unsubscribe = onUnauthorized(handler);
 
     mockFetch(401, { statusCode: 401, message: 'Invalid role or password' });
-    await expect(api.login('admin', 'nope')).rejects.toThrow('Invalid role or password');
+    await expect(api.login('demo', 'admin', 'nope')).rejects.toThrow('Invalid role or password');
     expect(handler).not.toHaveBeenCalled();
 
     setAuthToken('expired');

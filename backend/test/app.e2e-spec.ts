@@ -3,6 +3,9 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { DEFAULT_TENANT_SLUG } from '../src/auth/auth.constants';
+import { config } from '../src/config';
+import { SUBSCRIPTION_EXPIRED_MESSAGE } from '../src/tenancy/subscription.rules';
 import { sampleBooks } from '../src/database/sample-data';
 
 describe('Library API (e2e)', () => {
@@ -12,7 +15,14 @@ describe('Library API (e2e)', () => {
 
   const http = () => request(app.getHttpServer());
 
-  const login = (role: string, password: string) => http().post('/api/v1/auth/login').send({ role, password });
+  const login = (role: string, password: string, tenantSlug = DEFAULT_TENANT_SLUG) =>
+    http().post('/api/v1/auth/login').send({ role, password, tenantSlug });
+
+  const superAdminLogin = () =>
+    http().post('/api/v1/super-admin/auth/login').send({
+      email: config.superAdminEmail,
+      password: config.superAdminPassword,
+    });
 
   /** Supertest client that sends the given Bearer token (or none) on every request. */
   const client = (token?: string) => {
@@ -31,7 +41,7 @@ describe('Library API (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule.register({ dbPath: ':memory:', serveFrontend: false, autoSeed: true })],
     }).compile();
-    app = configureApp(moduleRef.createNestApplication());
+    app = configureApp(moduleRef.createNestApplication({ rawBody: true }));
     await app.init();
 
     adminToken = (await login('admin', '1234').expect(200)).body.token;
@@ -43,24 +53,37 @@ describe('Library API (e2e)', () => {
   describe('authentication (REQ-105)', () => {
     it.each(['admin', 'user'])('POST /api/v1/auth/login logs in the %s role with password 1234', async (role) => {
       const res = await login(role, '1234').expect(200);
-      expect(res.body).toEqual({ success: true, role, token: expect.any(String), expiresIn: expect.any(Number) });
+      expect(res.body).toEqual({
+        success: true,
+        role,
+        tenantSlug: DEFAULT_TENANT_SLUG,
+        tenantId: expect.any(Number),
+        subscriptionExpiresAt: expect.any(String),
+        token: expect.any(String),
+        expiresIn: expect.any(Number),
+      });
     });
 
     it('rejects a wrong password with 401 in the standard error format', async () => {
       const res = await login('admin', 'wrong').expect(401);
-      expect(res.body).toEqual({ statusCode: 401, message: 'Invalid role or password', error: 'Unauthorized' });
+      expect(res.body).toEqual({ statusCode: 401, message: 'Invalid tenant, role or password', error: 'Unauthorized' });
       expect(res.body.token).toBeUndefined();
     });
 
     it('rejects an invalid role or missing fields with 400', async () => {
       await login('superuser', '1234').expect(400);
-      await http().post('/api/v1/auth/login').send({ role: 'user' }).expect(400);
-      await http().post('/api/v1/auth/login').send({ password: '1234' }).expect(400);
+      await http().post('/api/v1/auth/login').send({ role: 'user', password: '1234' }).expect(400);
+      await http().post('/api/v1/auth/login').send({ tenantSlug: DEFAULT_TENANT_SLUG, password: '1234' }).expect(400);
     });
 
     it('GET /api/v1/auth/me returns the role behind the token', async () => {
-      await user().get('/api/v1/auth/me').expect(200, { role: 'user' });
-      await admin().get('/api/v1/auth/me').expect(200, { role: 'admin' });
+      const userMe = (await user().get('/api/v1/auth/me').expect(200)).body;
+      expect(userMe).toMatchObject({ role: 'user', principal: 'tenant' });
+      expect(typeof userMe.tenantId).toBe('number');
+
+      const adminMe = (await admin().get('/api/v1/auth/me').expect(200)).body;
+      expect(adminMe).toMatchObject({ role: 'admin', principal: 'tenant' });
+      expect(typeof adminMe.tenantId).toBe('number');
     });
 
     it.each(['/api/books', '/api/members', '/api/loans', '/api/dashboard', '/api/v1/auth/me'])(
@@ -237,5 +260,71 @@ describe('Library API (e2e)', () => {
   it('returns 404 for unknown resources', async () => {
     await admin().get('/api/members/9999').expect(404);
     await admin().patch('/api/loans/9999/return').expect(404);
+  });
+
+  describe('REQ-109 multi-tenancy and subscriptions', () => {
+    it('logs in Super Admin and lists tenants', async () => {
+      const loginRes = await superAdminLogin().expect(200);
+      expect(loginRes.body).toMatchObject({ success: true, role: 'super_admin', token: expect.any(String) });
+      const superToken = loginRes.body.token;
+
+      const tenants = await client(superToken).get('/api/v1/admin/tenants').expect(200);
+      expect(tenants.body.some((t: { slug: string }) => t.slug === DEFAULT_TENANT_SLUG)).toBe(true);
+    });
+
+    it('provisions a college tenant from a Stripe checkout webhook', async () => {
+      const sessionId = `cs_test_e2e_${Date.now()}`;
+      await http()
+        .post('/api/v1/payments/stripe/webhook')
+        .send({
+          type: 'checkout.session.completed',
+          data: {
+            object: {
+              id: sessionId,
+              metadata: {
+                collegeName: 'Oak Valley College',
+                slug: 'oak-valley',
+                contactEmail: 'admin@oak.example',
+              },
+            },
+          },
+        })
+        .expect(200);
+
+      const superToken = (await superAdminLogin().expect(200)).body.token;
+      const tenants = (await client(superToken).get('/api/v1/admin/tenants').expect(200)).body;
+      const oak = tenants.find((t: { slug: string }) => t.slug === 'oak-valley');
+      expect(oak).toMatchObject({ subscriptionStatus: 'active', name: 'Oak Valley College' });
+
+      await login('admin', '1234', 'oak-valley').expect(200);
+    });
+
+    it('records offline payment and blocks expired tenant login', async () => {
+      const superToken = (await superAdminLogin().expect(200)).body.token;
+      const tenants = (await client(superToken).get('/api/v1/admin/tenants').expect(200)).body;
+      const oak = tenants.find((t: { slug: string }) => t.slug === 'oak-valley');
+      expect(oak).toBeDefined();
+
+      const offline = await client(superToken)
+        .post(`/api/v1/admin/tenants/${oak.id}/offline-payment`)
+        .send({ years: 1 })
+        .expect(200);
+      expect(offline.body.expiresAt).toEqual(expect.any(String));
+
+      const expired = await login('user', '1234', 'expired-demo').expect(403);
+      expect(expired.body.message).toBe(SUBSCRIPTION_EXPIRED_MESSAGE);
+    });
+
+    it('starts Stripe checkout for a new college (mock when keys are absent)', async () => {
+      const res = await http()
+        .post('/api/v1/subscriptions/checkout-session')
+        .send({
+          collegeName: 'Pine College',
+          slug: 'pine-college',
+          contactEmail: 'billing@pine.example',
+        })
+        .expect(200);
+      expect(res.body).toMatchObject({ url: expect.any(String), sessionId: expect.any(String) });
+    });
   });
 });

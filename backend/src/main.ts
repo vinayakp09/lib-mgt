@@ -7,7 +7,7 @@ import { configureApp } from './app.setup';
 import { config } from './config';
 
 async function bootstrap() {
-  const app = configureApp(await NestFactory.create(AppModule.register()));
+  const app = configureApp(await NestFactory.create(AppModule.register(), { rawBody: true }));
   await app.listen(config.port);
 
   const logger = new Logger('Bootstrap');

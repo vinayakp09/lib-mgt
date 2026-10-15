@@ -3,13 +3,47 @@ export type Role = 'admin' | 'user';
 export interface LoginResponse {
   success: boolean;
   role: Role;
+  tenantSlug: string;
+  tenantId: number;
+  subscriptionExpiresAt: string | null;
   token: string;
   expiresIn: number;
 }
 
 export interface Session {
+  kind: 'college';
   role: Role;
   token: string;
+  tenantSlug: string;
+  tenantId: number;
+  subscriptionExpiresAt: string | null;
+}
+
+export interface SuperAdminLoginResponse {
+  success: boolean;
+  role: 'super_admin';
+  token: string;
+  expiresIn: number;
+}
+
+export interface SuperAdminSession {
+  kind: 'super_admin';
+  token: string;
+}
+
+export interface TenantListItem {
+  id: number;
+  slug: string;
+  name: string;
+  subscriptionStatus: 'pending' | 'active' | 'expired';
+  subscriptionExpiresAt: string | null;
+  contactEmail: string | null;
+  createdAt: string;
+}
+
+export interface CheckoutSessionResponse {
+  url: string;
+  sessionId: string;
 }
 
 export interface Book {

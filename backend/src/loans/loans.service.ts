@@ -6,6 +6,7 @@ import { Member } from '../members/member.entity';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { LoanQueryDto } from './dto/loan-query.dto';
 import { Loan } from './loan.entity';
+import { TenancyContext } from '../tenancy/tenancy.context';
 import {
   DEFAULT_LOAN_DAYS,
   LoanView,
@@ -20,10 +21,15 @@ export class LoansService {
   constructor(
     @InjectRepository(Loan) private readonly loans: Repository<Loan>,
     private readonly dataSource: DataSource,
+    private readonly tenancy: TenancyContext,
   ) {}
 
+  private tenantId(): number {
+    return this.tenancy.requireTenantId();
+  }
+
   async findAll(query: LoanQueryDto = {}): Promise<LoanView[]> {
-    const where: FindOptionsWhere<Loan> = {};
+    const where: FindOptionsWhere<Loan> = { tenantId: this.tenantId() };
     if (query.memberId) where.member = { id: query.memberId };
     if (query.bookId) where.book = { id: query.bookId };
     if (query.status === 'returned') where.returnDate = Not(IsNull());
@@ -37,7 +43,7 @@ export class LoansService {
   }
 
   async findOne(id: number): Promise<LoanView> {
-    const loan = await this.loans.findOneBy({ id });
+    const loan = await this.loans.findOneBy({ id, tenantId: this.tenantId() });
     if (!loan) {
       throw new NotFoundException(`Loan #${id} not found`);
     }
@@ -45,12 +51,13 @@ export class LoansService {
   }
 
   async borrow(dto: CreateLoanDto): Promise<LoanView> {
+    const tenantId = this.tenantId();
     const loan = await this.dataSource.transaction(async (manager) => {
-      const member = await manager.findOneBy(Member, { id: dto.memberId });
+      const member = await manager.findOneBy(Member, { id: dto.memberId, tenantId });
       if (!member) throw new NotFoundException(`Member #${dto.memberId} not found`);
       if (!member.active) throw new BadRequestException(`Member "${member.name}" is inactive`);
 
-      const book = await manager.findOneBy(Book, { id: dto.bookId });
+      const book = await manager.findOneBy(Book, { id: dto.bookId, tenantId });
       if (!book) throw new NotFoundException(`Book #${dto.bookId} not found`);
       if (book.availableCopies < 1) {
         throw new BadRequestException(`No copies of "${book.title}" are available`);
@@ -72,6 +79,7 @@ export class LoansService {
       const loanDate = new Date();
       return manager.save(
         manager.create(Loan, {
+          tenantId,
           book,
           member,
           loanDate,
@@ -86,7 +94,7 @@ export class LoansService {
 
   async returnLoan(id: number): Promise<LoanView> {
     const loan = await this.dataSource.transaction(async (manager) => {
-      const existing = await manager.findOneBy(Loan, { id });
+      const existing = await manager.findOneBy(Loan, { id, tenantId: this.tenantId() });
       if (!existing) throw new NotFoundException(`Loan #${id} not found`);
       if (existing.returnDate) throw new BadRequestException(`Loan #${id} has already been returned`);
 

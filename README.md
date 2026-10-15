@@ -14,7 +14,8 @@ Detailed docs live in [`docs/knowledge-base/`](docs/knowledge-base/): [Project o
 
 ## Features
 
-- **Role-based login** – choose **User** or **Admin** and enter the default password **`1234`**. Admins have full access; users can search books, borrow and return (no book/member editing)
+- **Multi-tenant SaaS (REQ-109)** – each college is a tenant; sign in with **tenant slug** + **User/Admin** + password **`1234`**. **Super Admin** (`/super-admin`, seeded `super@library.local` / `super-admin-pass`) manages tenants; **Stripe Checkout** (`/subscribe`) or offline payments activate annual subscriptions
+- **Role-based login** – per-tenant **User** or **Admin** roles; expired subscriptions block college login with a clear message
 - **Books** – master-detail split view: a paginated list with search (title/author/ISBN/category), category and availability filters and sorting (title, author, year, rating, recently added); the selected book's cover, rating, description and reviews alongside it; inline add/edit/delete for admins; copy tracking (available / total)
 - **Reviews** – anyone signed in can rate a book 1–5 stars with an optional comment; the average rating is shown in the list and is sortable
 - **Members** – registration, active/inactive status, search
@@ -57,7 +58,7 @@ npm run dev          # API on :3000 (nest --watch) + Vite on http://localhost:51
 ```
 
 The database is auto-seeded on first start if it is empty. Set `AUTO_SEED=false` to disable.
-Other environment variables: `PORT` (default `3000`), `DB_PATH` (default `database/library.sqlite`), `AUTH_SECRET` (signs login tokens; if unset a random one is used and everyone is logged out when the server restarts).
+Other environment variables: `PORT` (default `3000`), `DB_PATH` (default `database/library.sqlite`), `AUTH_SECRET` (signs login tokens; if unset a random one is used and everyone is logged out when the server restarts), `APP_PUBLIC_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`.
 
 ## Tests
 

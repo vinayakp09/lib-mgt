@@ -8,6 +8,7 @@ import { CreateBookDto } from './dto/create-book.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { Review } from './review.entity';
+import { TenancyContext } from '../tenancy/tenancy.context';
 import { summarizeRatings } from './review.rules';
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -29,13 +30,18 @@ export class BooksService {
     @InjectRepository(Loan) private readonly loans: Repository<Loan>,
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
     private readonly dataSource: DataSource,
+    private readonly tenancy: TenancyContext,
   ) {}
+
+  private tenantId(): number {
+    return this.tenancy.requireTenantId();
+  }
 
   async list(query: BookListQueryDto = {}): Promise<Paginated<Book>> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE;
 
-    const filters: FindOptionsWhere<Book> = {};
+    const filters: FindOptionsWhere<Book> = { tenantId: this.tenantId() };
     if (query.category) filters.category = query.category;
     if (query.availability === 'available') filters.availableCopies = MoreThan(0);
     if (query.availability === 'unavailable') filters.availableCopies = 0;
@@ -66,6 +72,7 @@ export class BooksService {
     const rows = await this.books
       .createQueryBuilder('book')
       .select('DISTINCT book.category', 'category')
+      .where('book.tenantId = :tenantId', { tenantId: this.tenantId() })
       .orderBy('book.category', 'ASC')
       .getRawMany<{ category: string }>();
     return rows.map((row) => row.category);
@@ -82,11 +89,12 @@ export class BooksService {
 
   async addReview(id: number, dto: CreateReviewDto): Promise<BookDetail> {
     await this.dataSource.transaction(async (manager) => {
-      const book = await manager.findOneBy(Book, { id });
+      const book = await manager.findOneBy(Book, { id, tenantId: this.tenantId() });
       if (!book) throw new NotFoundException(`Book #${id} not found`);
 
       await manager.save(
         manager.create(Review, {
+          tenantId: this.tenantId(),
           book,
           reviewerName: dto.reviewerName.trim(),
           rating: dto.rating,
@@ -103,17 +111,23 @@ export class BooksService {
   findAll(search?: string): Promise<Book[]> {
     const term = search?.trim();
     if (!term) {
-      return this.books.find({ order: { title: 'ASC' } });
+      return this.books.find({ where: { tenantId: this.tenantId() }, order: { title: 'ASC' } });
     }
     const like = Like(`%${term}%`);
+    const tenantId = this.tenantId();
     return this.books.find({
-      where: [{ title: like }, { author: like }, { isbn: like }, { category: like }],
+      where: [
+        { tenantId, title: like },
+        { tenantId, author: like },
+        { tenantId, isbn: like },
+        { tenantId, category: like },
+      ],
       order: { title: 'ASC' },
     });
   }
 
   async findOne(id: number): Promise<Book> {
-    const book = await this.books.findOneBy({ id });
+    const book = await this.books.findOneBy({ id, tenantId: this.tenantId() });
     if (!book) {
       throw new NotFoundException(`Book #${id} not found`);
     }
@@ -122,7 +136,11 @@ export class BooksService {
 
   async create(dto: CreateBookDto): Promise<Book> {
     await this.ensureIsbnAvailable(dto.isbn);
-    const book = this.books.create({ ...dto, availableCopies: dto.totalCopies });
+    const book = this.books.create({
+      ...dto,
+      tenantId: this.tenantId(),
+      availableCopies: dto.totalCopies,
+    });
     return this.books.save(book);
   }
 
@@ -154,7 +172,7 @@ export class BooksService {
   }
 
   private async ensureIsbnAvailable(isbn: string): Promise<void> {
-    if (await this.books.existsBy({ isbn })) {
+    if (await this.books.existsBy({ isbn, tenantId: this.tenantId() })) {
       throw new ConflictException(`A book with ISBN ${isbn} already exists`);
     }
   }

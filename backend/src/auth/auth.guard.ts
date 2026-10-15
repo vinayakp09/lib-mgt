@@ -7,10 +7,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { AuthUser, IS_PUBLIC_KEY, ROLES_KEY, Role } from './auth.constants';
+import { AuthUser, IS_PUBLIC_KEY, ROLES_KEY, Role, SUPER_ADMIN_ROLE } from './auth.constants';
 import { AuthService } from './auth.service';
 
 export type AuthenticatedRequest = Request & { user?: AuthUser };
+
+type AllowedRole = Role | typeof SUPER_ADMIN_ROLE;
 
 /** Global guard: every route needs a valid Bearer token unless marked @Public(); @Roles() narrows access further. */
 @Injectable()
@@ -34,10 +36,22 @@ export class AuthGuard implements CanActivate {
     }
     request.user = user;
 
-    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, targets);
-    if (roles?.length && !roles.includes(user.role)) {
+    if (user.principal === 'tenant' && user.tenantId != null) {
+      await this.auth.assertTenantSubscriptionActive(user.tenantId);
+    }
+
+    const roles = this.reflector.getAllAndOverride<AllowedRole[] | undefined>(ROLES_KEY, targets);
+    const superAdminRoute = roles?.includes(SUPER_ADMIN_ROLE) ?? false;
+    if (user.principal === 'super' && !superAdminRoute) {
+      throw new ForbiddenException('Super Admin cannot access college library routes');
+    }
+    if (user.principal === 'tenant' && superAdminRoute) {
       throw new ForbiddenException('You do not have permission to perform this action');
     }
+    if (roles?.length && !roles.includes(user.role as AllowedRole)) {
+      throw new ForbiddenException('You do not have permission to perform this action');
+    }
+
     return true;
   }
 }

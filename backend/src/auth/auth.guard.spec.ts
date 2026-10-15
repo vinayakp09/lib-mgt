@@ -2,7 +2,8 @@ import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@ne
 import { Reflector } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { DEFAULT_PASSWORD, Public, Role, Roles } from './auth.constants';
+import { TenantsService } from '../tenancy/tenants.service';
+import { DEFAULT_PASSWORD, DEFAULT_TENANT_SLUG, Public, Role, Roles } from './auth.constants';
 import { AuthGuard, AuthenticatedRequest } from './auth.guard';
 import { AuthService } from './auth.service';
 
@@ -29,13 +30,30 @@ describe('AuthGuard', () => {
   let guard: AuthGuard;
   let auth: AuthService;
 
+  const tenants = {
+    findBySlug: jest.fn(),
+    findById: jest.fn().mockResolvedValue({
+      id: 1,
+      subscriptionStatus: 'active',
+      subscriptionExpiresAt: new Date(Date.now() + 86400000),
+    }),
+  };
+
   const bearer = async (role: Role) =>
-    `Bearer ${(await auth.login({ role, password: DEFAULT_PASSWORD })).token}`;
+    `Bearer ${(
+      await auth.login({ tenantSlug: DEFAULT_TENANT_SLUG, role, password: DEFAULT_PASSWORD })
+    ).token}`;
 
   beforeEach(async () => {
+    tenants.findBySlug.mockResolvedValue({
+      id: 1,
+      slug: DEFAULT_TENANT_SLUG,
+      subscriptionStatus: 'active',
+      subscriptionExpiresAt: new Date(Date.now() + 86400000),
+    });
     moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({ secret: 'test-secret' })],
-      providers: [AuthService, AuthGuard, Reflector],
+      providers: [AuthService, AuthGuard, Reflector, { provide: TenantsService, useValue: tenants }],
     }).compile();
     guard = moduleRef.get(AuthGuard);
     auth = moduleRef.get(AuthService);
@@ -58,7 +76,7 @@ describe('AuthGuard', () => {
   it.each(['admin', 'user'] as const)('lets the %s role into routes without @Roles and attaches the user', async (role) => {
     const { context, request } = contextFor(TestController.prototype.anyRole, await bearer(role));
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toEqual({ role });
+    expect(request.user).toEqual({ role, principal: 'tenant', tenantId: 1 });
   });
 
   it('lets admins into admin-only routes', async () => {
